@@ -1,0 +1,31 @@
+.tab-content {
+    padding: 2rem;
+    animation: slideUp 0.4s ease-out;
+    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.header h1 {
+    color: #e8a30e;
+    margin: 0;
+    font-weight: 700;
+    font-size: 25px;
+    text-transform: uppercase;
+}
+
+.header p {
+    color: #888;
+    margin-top: 0rem;
+    font-size: 1.1rem;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

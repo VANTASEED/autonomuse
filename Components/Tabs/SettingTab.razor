@@ -1,0 +1,61 @@
+@using Autonomuse.ViewModels
+@inject SettingViewModel ViewModel
+
+<div class="tab-content">
+    <div class="header">
+        <h1>Application Settings</h1>
+        <p>Configure your Autonomuse experience</p>
+    </div>
+    <div class="settings-grid">
+        <div class="settings-card">
+            <h2 class="card-title">Library Storage</h2>
+            
+            <div class="setting-item">
+                <label for="library-path">Default Library Path</label>
+                <div class="input-group">
+                    <input type="text" id="library-path" placeholder="C:\Users\..." value="@ViewModel.CurrentPath" readonly>
+                    <button class="pill-button" @onclick="ViewModel.UpdatePathAsync">Browse</button>
+                </div>
+            </div>
+
+            @if (ViewModel.PathHistory?.Any() == true)
+            {
+                <div class="history-section">
+                    <h3 class="history-title">Path History</h3>
+                    <div class="history-list">
+                        @foreach (var item in ViewModel.PathHistory)
+                        {
+                            <div class="history-item @(item.Exists ? "" : "missing")">
+                                <div class="history-path" title="@(item.Exists ? item.Path : "Path missing: " + item.Path)">@item.Path</div>
+                                <div class="history-actions">
+                                    @if (item.Exists)
+                                    {
+                                        <button class="icon-button" @onclick="() => ViewModel.SwitchToPathAsync(item)" title="Switch to this path">
+                                            <span class="action-icon">⇄</span>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="icon-button warning-btn wide-btn" @onclick="() => ViewModel.RecreatePathAsync(item)" title="Folder missing. Click to recreate and switch">
+                                            <span class="action-icon">✚📁</span>
+                                        </button>
+                                    }
+                                    <button class="icon-button" @onclick="() => ViewModel.OpenInExplorer(item.Path)" title="Open in Explorer">
+                                        <span class="explorer-icon">📂</span>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        ViewModel.PropertyChanged += (s, e) => StateHasChanged();
+    }
+}

@@ -1,0 +1,36 @@
+@page "/"
+@using Autonomuse.ViewModels
+@inject StartViewModel ViewModel
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await ViewModel.CheckOnBoardingStatusAsync();
+    }
+}
+
+<div class="container">
+    <div class="welcome">
+        <img src="/images/Assets/Autonomuse2.png" alt="Autonomuse" class="welcomeImage" />
+        
+        @if (!string.IsNullOrEmpty(ViewModel.LibraryPath))
+        {
+            <div class="pathDisplay" title="@ViewModel.LibraryPath">
+                <span class="pathLabel">Selected</span>
+                <span class="pathSeparator"></span>
+                <span class="pathValue">@ViewModel.LibraryPath</span>
+            </div>
+        }
+
+        <div class="buttonContainer">
+            <button class="folderButton" @onclick="ViewModel.SelectLibraryFolderAsync">
+                @((string.IsNullOrEmpty(ViewModel.LibraryPath) ? "Select Library Folder" : "Change Library Folder"))
+            </button>
+
+            @if (!string.IsNullOrEmpty(ViewModel.LibraryPath))
+            {
+                <button class="mutedButton" @onclick="ViewModel.CompleteOnBoardingAsync">Next</button>
+            }
+        </div>
+    </div> 
+</div>
