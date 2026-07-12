@@ -1,6 +1,1396 @@
+@using Autonomuse.Domain.Entities
+@using Autonomuse.Shared.Contracts
+@using Autonomuse.Shared.Utilities
+@inject IAudioService AudioService
+@inject ISettingsService SettingsService
+@inject IAudioEnrichmentService EnrichmentService
+@inject IJSRuntime JSRuntime
+
 <div class="tab-content">
     <div class="header">
         <h1>Music Library</h1>
         <p>Manage and listen to your local audio collection</p>
     </div>
+
+    <div class="audio-content">
+        <div class="control-cards glass-card">
+            <div class="control-actions">
+                @if (_isEnrichingAll)
+                {
+                    <div class="global-progress">
+                        <span class="progress-label">@_globalProgressMessage</span>
+                        <div class="progress-bar mini">
+                            <div class="progress-fill" style="width: @(_globalProgress * 100)%"></div>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <button class="action-btn enrich-all" @onclick="EnrichAllAsync" disabled="@(_isEnrichingAll || _isSelectionMode)">
+                        <i class="icon-sparkles"></i> Enrich Library
+                    </button>
+                    @if (!_isSelectionMode)
+                    {
+                        <button class="action-btn select-audio" @onclick="ToggleSelectionMode" disabled="@_isEnrichingAll">
+                            Select Audio
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="split-pill">
+                            <button class="split-btn" @onclick="ToggleSelectionMode">Cancel Selection</button>
+                            <div class="divider"></div>
+                            <button class="split-btn" @onclick="SelectAll">Select All</button>
+                        </div>
+                        @if (_showDeleteConfirm)
+                        {
+                            <div class="confirm-group">
+                                <span class="confirm-text">Delete @_selectedGuids.Count items?</span>
+                                <button class="action-btn danger-btn" @onclick="ConfirmDeleteSelectedAsync">Confirm</button>
+                                <button class="action-btn select-audio" @onclick="() => _showDeleteConfirm = false">Cancel</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button class="action-btn enrich-selected" @onclick="EnrichSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
+                                <i class="icon-sparkles"></i> Enrich Selected (@_selectedGuids.Count)
+                            </button>
+                            <button class="action-btn danger-btn" @onclick="() => _showDeleteConfirm = true" disabled="@(_selectedGuids.Count == 0)">
+                                Delete Selected (@_selectedGuids.Count)
+                            </button>
+                        }
+                    }
+
+                    <div class="search-container">
+                        <div class="search-input-wrapper">
+                            <i class="icon-search-mini"></i>
+                            <input type="text" 
+                                   @bind="_searchQuery" 
+                                   @bind:event="oninput" 
+                                   @onkeyup="HandleSearchKeyUp"
+                                   placeholder="artist:daft_punk, genre:electronic..." 
+                                   class="search-input" />
+                            @if (!string.IsNullOrEmpty(_searchQuery))
+                            {
+                                <button class="clear-search" @onclick="ClearSearch">×</button>
+                            }
+                            <div class="search-tooltip">
+                                <div class="tooltip-header">Search Tags</div>
+                                <div class="tooltip-body">
+                                    <p>Filter your library using tags separated by commas:</p>
+                                    <ul>
+                                        <li><strong>source</strong> filter by source (e.g. <code>youtube</code>, <code>manual</code>)</li>
+                                        <li><strong>artist</strong> filter by artist (e.g. <code>daft_punk</code>)</li>
+                                        <li><strong>album</strong> filter by album name</li>
+                                        <li><strong>genre</strong> filter by genre (e.g. <code>electronic</code>)</li>
+                                        <li><strong>year</strong> filter by year (e.g. <code>2013</code>)</li>
+                                        <li><strong>title</strong> filter by song title</li>
+                                    </ul>
+                                    <p class="tooltip-example">Example: <code>artist:daft_punk, year:2013</code></p>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="search-btn" @onclick="PerformSearch">Search</button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="list-cards glass-card">
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <button class="filter-btn @(_selectedSource == "all" && _selectedStatus == "all" && string.IsNullOrEmpty(_selectedPlaylistId) && _selectedSort == "title" && _isSortAscending ? "active" : "")" @onclick="ClearAllFiltersAsync">All</button>
+
+                    <div class="sort-compound-pill">
+                        <div class="custom-dropdown sort-dropdown compound-left">
+                            <button class="dropdown-trigger @(_isSortDropdownOpen ? "active" : "")" @onclick="ToggleSortDropdown">
+                                <span class="dropdown-selected-text">@GetSortDisplayText()</span>
+                                <span class="dropdown-arrow">▼</span>
+                            </button>
+                            @if (_isSortDropdownOpen)
+                            {
+                                <div class="dropdown-popup glass-card">
+                                    <div class="dropdown-item @(_selectedSort == "title" ? "active" : "")" @onclick='() => SelectSort("title")'>Title</div>
+                                    <div class="dropdown-item @(_selectedSort == "artist" ? "active" : "")" @onclick='() => SelectSort("artist")'>Artist</div>
+                                    <div class="dropdown-item @(_selectedSort == "year" ? "active" : "")" @onclick='() => SelectSort("year")'>Year</div>
+                                    <div class="dropdown-item @(_selectedSort == "added" ? "active" : "")" @onclick='() => SelectSort("added")'>Added</div>
+                                </div>
+                            }
+                        </div>
+
+                        <button class="sort-toggle-btn compound-right" @onclick="ToggleSortDirection">
+                            @(_isSortAscending ? "↑" : "↓")
+                        </button>
+                    </div>
+
+                    <div class="split-pill mini">
+                        <button class="split-btn @(_selectedSource == "manual" ? "active" : "")" @onclick='() => SetSourceFilter("manual")'>Manual</button>
+                        <div class="divider"></div>
+                        <button class="split-btn @(_selectedSource == "youtube" ? "active" : "")" @onclick='() => SetSourceFilter("youtube")'>YouTube</button>
+                    </div>
+
+                    <div class="custom-dropdown status-dropdown">
+                        <button class="dropdown-trigger @(_isStatusDropdownOpen ? "active" : "")" @onclick="ToggleStatusDropdown">
+                            <span class="dropdown-selected-text">@GetStatusDisplayText()</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </button>
+                        @if (_isStatusDropdownOpen)
+                        {
+                            <div class="dropdown-popup glass-card">
+                                <div class="dropdown-item @(_selectedStatus == "all" ? "active" : "")" @onclick='() => SelectStatus("all")'>All</div>
+                                <div class="dropdown-item @(_selectedStatus == "standard" ? "active" : "")" @onclick='() => SelectStatus("standard")'>Standard</div>
+                                <div class="dropdown-item @(_selectedStatus == "partial" ? "active" : "")" @onclick='() => SelectStatus("partial")'>Partial</div>
+                                <div class="dropdown-item @(_selectedStatus == "full" ? "active" : "")" @onclick='() => SelectStatus("full")'>Full</div>
+                                <div class="dropdown-item @(_selectedStatus == "manual" ? "active" : "")" @onclick='() => SelectStatus("manual")'>Manual</div>
+                                <div class="dropdown-item @(_selectedStatus == "disabled" ? "active" : "")" @onclick='() => SelectStatus("disabled")'>Locked</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="playlist-filter">
+                    <div class="custom-dropdown">
+                        <button class="dropdown-trigger @(_isPlaylistDropdownOpen ? "active" : "")" @onclick="TogglePlaylistDropdown">
+                            <i class="icon-playlist"></i>
+                            <span class="dropdown-selected-text">@(_selectedPlaylistName ?? "All Audio")</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </button>
+                        @if (_isPlaylistDropdownOpen)
+                        {
+                            <div class="dropdown-popup glass-card">
+                                <div class="dropdown-item @(string.IsNullOrEmpty(_selectedPlaylistId) ? "active" : "")" 
+                                        @onclick='() => SelectPlaylist(null, "All Audio")'>
+                                    All Audio
+                                </div>
+                                <div class="dropdown-item @(_selectedPlaylistId == "any-playlist" ? "active" : "")" 
+                                        @onclick='() => SelectPlaylist("any-playlist", "All Playlist")'>
+                                    All Playlist
+                                </div>
+                                <div class="dropdown-item @(_selectedPlaylistId == "none-playlist" ? "active" : "")" 
+                                        @onclick='() => SelectPlaylist("none-playlist", "No Playlist")'>
+                                    No Playlist
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                @foreach (var p in _playlists)
+                                {
+                                    <div class="dropdown-item @(_selectedPlaylistId == p.GUID ? "active" : "")" 
+                                            @onclick='() => SelectPlaylist(p.GUID, p.Name)'>
+                                        @p.Name
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @if (_isLoading)
+            {
+                <div class="loading-state">
+                    <p>Loading audio library...</p>
+                </div>
+            }
+            else if (!_audioRecords.Any())
+            {
+                <div class="empty-state">
+                    <p>No audio records found in the library.</p>
+                </div>
+            }
+            else
+            {
+                <div class="music-cards-grid @(_isSelectionMode ? "selection-mode" : "")">
+                    @foreach (var record in FilteredRecords)
+                    {
+                        var isSelected = _selectedGuids.Contains(record.GUID);
+                        var coverUrl = _coverArts.TryGetValue(record.GUID, out var url) ? url : "images/Assets/empty_cover.png";
+                        var rawTitle = string.IsNullOrEmpty(record.AlternativeTitle) ? record.Title : record.AlternativeTitle;
+                        var displayTitle = FilePathSanitizer.SterilizeTitle(rawTitle, _sterilizationTags);
+                        var displayArtist = string.IsNullOrEmpty(record.Artist) ? "Unknown Artist" : record.Artist;
+                        var displayYear = record.Year?.ToString() ?? "N/A";
+                        
+                        <div class="music-card @(isSelected ? "selected" : "")" @onclick="() => HandleAudioCardClick(record)">
+                            @if (_isSelectionMode && isSelected)
+                            {
+                                <div class="selection-indicator">
+                                    <i class="icon-check">✓</i>
+                                </div>
+                            }
+                            <div class="music-card-top">
+                                <div class="vinyl-wrapper">
+                                    <div class="vinyl-inner">
+                                        <div class="vinyl-rotating">
+                                            <img class="vinyl-disc" src="images/Assets/vinyl_disc.png" alt="Vinyl Disc" />
+                                            <img class="vinyl-center-art" src="@coverUrl" alt="Center Art" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="cover-art-container">
+                                    <img class="cover-art" src="@coverUrl" alt="@displayTitle" />
+                                </div>
+                            </div>
+                            <div class="music-card-bottom">
+                                <div class="music-info-header">
+                                    <div class="title-artist-stack">
+                                        <h3 class="music-title" title="@displayTitle">@displayTitle</h3>
+                                        <p class="music-artist" title="@displayArtist">@displayArtist</p>
+                                    </div>
+                                    <div class="card-actions-stack" @onclick:stopPropagation>
+                                        <button class="enrich-btn @(IsRecordLocked(record) ? "enrich-disabled" : _enrichingGuids.Contains(record.GUID) ? "enriching" : "")" @onclick="() => EnrichSingleAsync(record)" 
+                                                disabled="@(_enrichingGuids.Contains(record.GUID) || IsRecordLocked(record))" 
+                                                title="@(IsRecordLocked(record) ? "Enrichment Locked" : "Enrich Metadata")">
+                                            @if (_enrichingGuids.Contains(record.GUID))
+                                            {
+                                                <div class="btn-spinner"></div>
+                                            }
+                                            else if (IsRecordLocked(record))
+                                            {
+                                                <i class="icon-ban" title="Locked"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="icon-enrichment"></i>
+                                            }
+                                        </button>
+                                        
+                                        <div class="menu-wrapper" @onclick:stopPropagation>
+                                            <button class="menu-trigger-btn" @onclick="() => ToggleMenu(record.GUID)" title="More options">
+                                                ⋮
+                                            </button>
+                                            
+                                            @if (_openMenuGuid == record.GUID)
+                                            {
+                                                <div class="context-menu glass-card">
+                                                    <button class="menu-item" @onclick="() => RestoreOriginalAsync(record)" 
+                                                            disabled="@(record.EnrichmentStatus == 0 || IsRecordLocked(record))"
+                                                            title="Restore original metadata">
+                                                        <i class="icon-restore"></i> De-Enrich
+                                                    </button>
+                                                    <button class="menu-item" @onclick="() => ToggleEnrichmentDisabledAsync(record)" 
+                                                            title="@(IsRecordLocked(record) ? "Unlock enrichment" : "Lock enrichment")">
+                                                        <i class="@(IsRecordLocked(record) ? "icon-enable" : "icon-disable")"></i> 
+                                                        @(IsRecordLocked(record) ? "Unlock Enrich" : "Lock Enrich")
+                                                    </button>
+                                                    @if (!IsRecordLocked(record))
+                                                    {
+                                                        <div class="dropdown-divider"></div>
+                                                        <button class="menu-item delete-item" @onclick="() => DeleteSingleAudioAsync(record)" title="Delete music record and file">
+                                                            <i class="icon-trash"></i> Delete
+                                                        </button>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="music-metadata-container">
+                                    <div class="meta-stack">
+                                        <p class="meta-text music-album" title="@record.Album">Album <span class="meta-dot">•</span> @(string.IsNullOrEmpty(record.Album) ? "N/A" : record.Album)</p>
+                                        <p class="meta-text music-genre" title="@record.Genre">Genre <span class="meta-dot">•</span> @(string.IsNullOrEmpty(record.Genre) ? "N/A" : record.Genre)</p>
+                                    </div>
+                                    <div class="music-pills">
+                                        <span class="pill year-pill">@displayYear</span>
+                                        <span class="pill source-pill @(record.Source == "youtube" ? "youtube" : "manual")">
+                                            @(record.Source == "youtube" ? "YouTube" : "Manual")
+                                        </span>
+                                        <span class="pill status-pill @GetStatusClass(record.EnrichmentStatus)"
+                                              title="@GetStatusTitle(record.EnrichmentStatus)">
+                                            @GetStatusText(record.EnrichmentStatus)
+                                        </span>
+                                    </div>
+                                    @if (record.Bitrate.HasValue || record.SampleRate.HasValue || record.Duration.HasValue)
+                                    {
+                                        <div class="quality-row">
+                                            <span class="pill rate-pill">
+                                                @if (record.Bitrate.HasValue)
+                                                {
+                                                    @($"{record.Bitrate.Value} kbps")
+                                                }
+                                                @if (record.Bitrate.HasValue && record.SampleRate.HasValue)
+                                                {
+                                                    @(" • ")
+                                                }
+                                                @if (record.SampleRate.HasValue)
+                                                {
+                                                    @($"{(record.SampleRate.Value / 1000.0).ToString("0.#")} kHz")
+                                                }
+                                                @if (record.Bitrate.HasValue || record.SampleRate.HasValue)
+                                                {
+                                                    @(" • ")
+                                                }
+                                                @if (record.Duration.HasValue && record.Duration.Value > 0)
+                                                {
+                                                    @(TimeSpan.FromSeconds(record.Duration.Value).ToString(@"hh\:mm\:ss"))
+                                                }
+                                                else
+                                                {
+                                                    @("NO LENGTH DATA")
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_recordToDelete != null)
+    {
+        <div class="modal-backdrop" @onclick="CancelDeleteSingle">
+            <div class="modal-card glass-card" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Delete Track</h3>
+                    <button class="close-btn" @onclick="CancelDeleteSingle">×</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-msg">Are you sure you want to delete <strong>@_recordToDelete.Title</strong>?</p>
+                    <p class="warning-text">This will permanently delete the audio file, cover art, and metadata from your library. This action is irreversible.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="action-btn select-audio" @onclick="CancelDeleteSingle">Cancel</button>
+                    <button class="action-btn danger-btn" @onclick="ConfirmDeleteSingleAsync">Delete</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_editMetadataRecord != null)
+    {
+        <div class="modal-backdrop" @onclick="CloseMetadataEdit">
+            <div class="modal-card metadata-modal glass-card" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Metadata Details</h3>
+                </div>
+                <div class="modal-body modal-columns">
+                    <div class="column-left">
+                        <div class="vinyl-preview-card">
+                            <div class="vinyl-wrapper-modal">
+                                <div class="vinyl-inner">
+                                    <div class="vinyl-rotating">
+                                        <img class="vinyl-disc" src="images/Assets/vinyl_disc.png" alt="Vinyl Disc" />
+                                        <img class="vinyl-center-art" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_cover.png" : _editCoverArtBase64)" alt="Center Art" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="cover-art-container-modal">
+                                <img class="cover-art" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_cover.png" : _editCoverArtBase64)" alt="Preview Cover Art" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column-right">
+                        <!-- Editable Fields Grid -->
+                        <div class="editable-grid">
+                            <!-- Title -->
+                            <div class="tech-item full-width editable-meta-item">
+                                <span class="tech-label">Title</span>
+                                <div class="editable-val-container">
+                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingTitleMode)
+                                    {
+                                        <input type="text" class="form-input inline-edit" @bind="_editTitle" @onblur="() => _editingTitleMode = false" @onkeydown="OnTitleKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingTitleMode = true; }">@(string.IsNullOrEmpty(_editTitle) ? "N/A" : _editTitle)</span>
+                                        @if (!IsRecordLocked(_editMetadataRecord))
+                                        {
+                                            <button class="pencil-btn" @onclick="() => _editingTitleMode = true">✎</button>
+                                        }
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Artist -->
+                            <div class="tech-item editable-meta-item">
+                                <span class="tech-label">Artist</span>
+                                <div class="editable-val-container">
+                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingArtistMode)
+                                    {
+                                        <input type="text" class="form-input inline-edit" @bind="_editArtist" @onblur="() => _editingArtistMode = false" @onkeydown="OnArtistKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingArtistMode = true; }">@(string.IsNullOrEmpty(_editArtist) ? "N/A" : _editArtist)</span>
+                                        @if (!IsRecordLocked(_editMetadataRecord))
+                                        {
+                                            <button class="pencil-btn" @onclick="() => _editingArtistMode = true">✎</button>
+                                        }
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Album -->
+                            <div class="tech-item editable-meta-item">
+                                <span class="tech-label">Album</span>
+                                <div class="editable-val-container">
+                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingAlbumMode)
+                                    {
+                                        <input type="text" class="form-input inline-edit" @bind="_editAlbum" @onblur="() => _editingAlbumMode = false" @onkeydown="OnAlbumKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingAlbumMode = true; }">@(string.IsNullOrEmpty(_editAlbum) ? "N/A" : _editAlbum)</span>
+                                        @if (!IsRecordLocked(_editMetadataRecord))
+                                        {
+                                            <button class="pencil-btn" @onclick="() => _editingAlbumMode = true">✎</button>
+                                        }
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Genre -->
+                            <div class="tech-item editable-meta-item">
+                                <span class="tech-label">Genre</span>
+                                <div class="editable-val-container">
+                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingGenreMode)
+                                    {
+                                        <input type="text" class="form-input inline-edit" @bind="_editGenre" @onblur="() => _editingGenreMode = false" @onkeydown="OnGenreKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingGenreMode = true; }">@(string.IsNullOrEmpty(_editGenre) ? "N/A" : _editGenre)</span>
+                                        @if (!IsRecordLocked(_editMetadataRecord))
+                                        {
+                                            <button class="pencil-btn" @onclick="() => _editingGenreMode = true">✎</button>
+                                        }
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Year -->
+                            <div class="tech-item editable-meta-item">
+                                <span class="tech-label">Year</span>
+                                <div class="editable-val-container">
+                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingYearMode)
+                                    {
+                                        <input type="number" class="form-input inline-edit" @bind="_editYear" min="1000" max="3000" @onblur="() => _editingYearMode = false" @onkeydown="OnYearKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingYearMode = true; }">@(_editYear.HasValue ? _editYear.Value.ToString() : "N/A")</span>
+                                        @if (!IsRecordLocked(_editMetadataRecord))
+                                        {
+                                            <button class="pencil-btn" @onclick="() => _editingYearMode = true">✎</button>
+                                        }
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Cover Art Upload -->
+                            <div class="tech-item full-width editable-meta-item">
+                                <span class="tech-label">Cover Art</span>
+                                @if (IsRecordLocked(_editMetadataRecord))
+                                {
+                                    <div class="file-upload-wrapper inline-upload" style="opacity: 0.5; cursor: not-allowed;">
+                                        <span class="file-upload-btn" style="pointer-events: none;">Choose Image</span>
+                                        <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="file-upload-wrapper inline-upload" @onclick="PickCoverArtNativeAsync">
+                                        <span class="file-upload-btn">Choose Image</span>
+                                        <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Technical Read-only Fields Grid -->
+                        <div class="technical-metadata-section">
+                            <div class="tech-grid-4">
+                                <div class="tech-item">
+                                    <span class="tech-label">Source</span>
+                                    <span class="tech-val">@_editMetadataRecord.Source</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">YouTube ID</span>
+                                    <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.YoutubeID) ? "N/A" : _editMetadataRecord.YoutubeID)</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Format</span>
+                                    <span class="tech-val">@_editMetadataRecord.Extension.ToUpper().TrimStart('.')</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">File Size</span>
+                                    <span class="tech-val">@FormatFileSize(_editMetadataRecord.FileSize)</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Duration</span>
+                                    <span class="tech-val">@FormatDuration(_editMetadataRecord.Duration)</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Bitrate</span>
+                                    <span class="tech-val">@(_editMetadataRecord.Bitrate.HasValue ? $"{_editMetadataRecord.Bitrate} kbps" : "N/A")</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Sample Rate</span>
+                                    <span class="tech-val">@(_editMetadataRecord.SampleRate.HasValue ? $"{(_editMetadataRecord.SampleRate.Value / 1000.0).ToString("0.#")} kHz" : "N/A")</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Channels</span>
+                                    <span class="tech-val">@(_editMetadataRecord.Channels.HasValue ? (_editMetadataRecord.Channels == 2 ? "Stereo" : "Mono") : "N/A")</span>
+                                </div>
+                                <div class="tech-item span-4">
+                                    <span class="tech-label">File Path</span>
+                                    <span class="tech-val" title="@_editMetadataRecord.FilePath">@_editMetadataRecord.FilePath</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @if (IsRecordLocked(_editMetadataRecord))
+                    {
+                        <button class="action-btn select-audio" @onclick="CloseMetadataEdit">Close</button>
+                    }
+                    else
+                    {
+                        <button class="action-btn select-audio" @onclick="CloseMetadataEdit" disabled="@_isSavingMetadata">Cancel</button>
+                        <button class="action-btn" @onclick="SaveMetadataChangesAsync" disabled="@_isSavingMetadata">
+                            @if (_isSavingMetadata)
+                            {
+                                <span class="btn-spinner mini"></span> @(" Saving...")
+                            }
+                            else
+                            {
+                                @("Save Changes")
+                            }
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    }
 </div>
+
+
+@code {
+    private List<AudioRecord> _audioRecords = new();
+    private Dictionary<string, string> _coverArts = new();
+    private List<string> _sterilizationTags = new();
+    private bool _isLoading = true;
+    
+    // Enrichment state
+    private HashSet<string> _enrichingGuids = new();
+    private bool _isEnrichingAll = false;
+    private double _globalProgress = 0;
+    private string _globalProgressMessage = "";
+    private string? _openMenuGuid;
+
+    // Selection state
+    private bool _isSelectionMode = false;
+    private HashSet<string> _selectedGuids = new();
+    private bool _showDeleteConfirm = false;
+    private AudioRecord? _recordToDelete;
+
+    // Metadata Editing State
+    private AudioRecord? _editMetadataRecord;
+    private string _editTitle = "";
+    private string _editArtist = "";
+    private string _editAlbum = "";
+    private string _editGenre = "";
+    private int? _editYear;
+    private string _editCoverArtBase64 = "";
+    private string _editCoverArtPath = "";
+    private bool _hasNewCoverArtUploaded = false;
+    private byte[]? _uploadedCoverArtBytes;
+    private string _uploadedCoverArtFileName = "";
+    private bool _isSavingMetadata = false;
+
+    // Inline Edit Modes
+    private bool _editingTitleMode = false;
+    private bool _editingArtistMode = false;
+    private bool _editingAlbumMode = false;
+    private bool _editingGenreMode = false;
+    private bool _editingYearMode = false;
+
+    // Search and Filter state
+    private string _searchQuery = "";
+    private string _selectedSource = "all";
+    private string _selectedStatus = "all";
+    private bool _isStatusDropdownOpen = false;
+    private string? _selectedPlaylistId;
+    private string? _selectedPlaylistName;
+    private bool _isPlaylistDropdownOpen = false;
+    private string _selectedSort = "title";
+    private bool _isSortAscending = true;
+    private bool _isSortDropdownOpen = false;
+    private List<AudioPlaylist> _playlists = new();
+    private HashSet<string> _guidsInAnyPlaylist = new();
+    private List<AudioRecord> _playlistItems = new();
+    private List<AudioRecord> _filteredRecords = new();
+    private List<AudioRecord> FilteredRecords => _filteredRecords;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAudioRecordsAsync();
+        _playlists = await AudioService.GetPlaylistsAsync();
+        _guidsInAnyPlaylist = await AudioService.GetAudioGuidsInAnyPlaylistAsync();
+    }
+
+    private void TogglePlaylistDropdown()
+    {
+        _isPlaylistDropdownOpen = !_isPlaylistDropdownOpen;
+    }
+
+    private async Task SelectPlaylist(string? guid, string name)
+    {
+        _selectedPlaylistId = guid;
+        _selectedPlaylistName = name;
+        _isPlaylistDropdownOpen = false;
+        
+        if (!string.IsNullOrEmpty(_selectedPlaylistId) && _selectedPlaylistId != "any-playlist" && _selectedPlaylistId != "none-playlist")
+        {
+            _playlistItems = await AudioService.GetAudioInPlaylistAsync(_selectedPlaylistId);
+        }
+        else
+        {
+            _playlistItems.Clear();
+            // If any-playlist or none-playlist, we'll refresh the set just in case
+            _guidsInAnyPlaylist = await AudioService.GetAudioGuidsInAnyPlaylistAsync();
+        }
+        await ApplyFiltersAsync();
+    }
+
+    private void ToggleStatusDropdown()
+    {
+        _isStatusDropdownOpen = !_isStatusDropdownOpen;
+    }
+
+    private async Task SelectStatus(string status)
+    {
+        _selectedStatus = status;
+        _isStatusDropdownOpen = false;
+        await ApplyFiltersAsync();
+    }
+
+    private string GetStatusDisplayText()
+    {
+        return _selectedStatus switch
+        {
+            "standard" => "Standard",
+            "partial" => "Partial",
+            "full" => "Full",
+            "disabled" => "Disabled",
+            _ => "All Status"
+        };
+    }
+
+    private async Task SetSourceFilter(string source)
+    {
+        _selectedSource = source;
+        await ApplyFiltersAsync();
+    }
+
+    private void ToggleSortDropdown()
+    {
+        _isSortDropdownOpen = !_isSortDropdownOpen;
+    }
+
+    private async Task SelectSort(string sort)
+    {
+        _selectedSort = sort;
+        _isSortDropdownOpen = false;
+        await ApplyFiltersAsync();
+    }
+
+    private string GetSortDisplayText()
+    {
+        return _selectedSort switch
+        {
+            "title" => "Title",
+            "artist" => "Artist",
+            "year" => "Year",
+            "added" => "Added",
+            _ => "Title"
+        };
+    }
+
+    private async Task SetSortDirection(bool isAscending)
+    {
+        _isSortAscending = isAscending;
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ToggleSortDirection()
+    {
+        _isSortAscending = !_isSortAscending;
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ToggleEnrichmentDisabledAsync(AudioRecord record)
+    {
+        _openMenuGuid = null;
+        if (IsRecordLocked(record))
+        {
+            record.EnrichmentStatus = record.EnrichmentStatus >= 10 ? record.EnrichmentStatus - 10 : 0;
+        }
+        else
+        {
+            record.EnrichmentStatus = 10 + record.EnrichmentStatus;
+        }
+        await AudioService.UpdateAudioRecordAsync(record);
+        await LoadAudioRecordsAsync();
+    }
+
+    private async Task ClearAllFiltersAsync()
+    {
+        _selectedSource = "all";
+        _selectedStatus = "all";
+        _selectedPlaylistId = null;
+        _selectedPlaylistName = "All Audio";
+        _selectedSort = "title";
+        _isSortAscending = true;
+        _playlistItems.Clear();
+        await ApplyFiltersAsync();
+    }
+
+    private async Task PerformSearch()
+    {
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        var results = _audioRecords.AsEnumerable();
+
+        // 1. Source Filter
+        if (_selectedSource == "manual") results = results.Where(r => r.Source != "youtube");
+        else if (_selectedSource == "youtube") results = results.Where(r => r.Source == "youtube");
+
+        // 2. Playlist Filter
+        if (!string.IsNullOrEmpty(_selectedPlaylistId))
+        {
+            if (_selectedPlaylistId == "any-playlist")
+            {
+                results = results.Where(r => _guidsInAnyPlaylist.Contains(r.GUID));
+            }
+            else if (_selectedPlaylistId == "none-playlist")
+            {
+                results = results.Where(r => !_guidsInAnyPlaylist.Contains(r.GUID));
+            }
+            else
+            {
+                var guidsInPlaylist = _playlistItems.Select(p => p.GUID).ToHashSet();
+                results = results.Where(r => guidsInPlaylist.Contains(r.GUID));
+            }
+        }
+
+        // 3. Search Query
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            var segments = _searchQuery.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var segment in segments)
+            {
+                var parts = segment.Split(':', 2);
+                if (parts.Length < 2) continue;
+
+                var tag = parts[0].Trim().ToLower();
+                var value = parts[1].Trim().ToLower().Replace("_", " ");
+
+                results = tag switch
+                {
+                    "source" => results.Where(r => r.Source?.ToLower().Contains(value) == true),
+                    "artist" => results.Where(r => r.Artist?.ToLower().Contains(value) == true),
+                    "album" => results.Where(r => r.Album?.ToLower().Contains(value) == true),
+                    "genre" => results.Where(r => r.Genre?.ToLower().Contains(value) == true),
+                    "year" => results.Where(r => r.Year?.ToString().Contains(value) == true),
+                    "title" => results.Where(r => (r.AlternativeTitle?.ToLower().Contains(value) == true) || (r.Title?.ToLower().Contains(value) == true)),
+                    _ => results
+                };
+            }
+        }
+
+        // 4. Status Filter
+        if (_selectedStatus != "all")
+        {
+            if (_selectedStatus == "standard") results = results.Where(r => r.EnrichmentStatus == 0);
+            else if (_selectedStatus == "partial") results = results.Where(r => r.EnrichmentStatus == 2);
+            else if (_selectedStatus == "full") results = results.Where(r => r.EnrichmentStatus == 1);
+            else if (_selectedStatus == "disabled") results = results.Where(r => r.EnrichmentStatus == 3 || r.EnrichmentStatus >= 10);
+            else if (_selectedStatus == "manual") results = results.Where(r => r.EnrichmentStatus == 4);
+        }
+
+        // 5. Sorting
+        results = _selectedSort switch
+        {
+            "title" => _isSortAscending 
+                ? results.OrderBy(r => GetSortGroup(GetSortTitle(r))).ThenBy(r => GetSortTitle(r))
+                : results.OrderBy(r => GetSortGroup(GetSortTitle(r))).ThenByDescending(r => GetSortTitle(r)),
+            "artist" => _isSortAscending 
+                ? results.OrderBy(r => GetSortGroup(r.Artist)).ThenBy(r => r.Artist)
+                : results.OrderBy(r => GetSortGroup(r.Artist)).ThenByDescending(r => r.Artist),
+            "year" => _isSortAscending ? results.OrderBy(r => r.Year) : results.OrderByDescending(r => r.Year),
+            "added" => _isSortAscending ? results.OrderBy(r => r.CreatedAt) : results.OrderByDescending(r => r.CreatedAt),
+            _ => results
+        };
+
+        _filteredRecords = results.ToList();
+        StateHasChanged();
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchQuery = "";
+        await ApplyFiltersAsync();
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PerformSearch();
+        }
+    }
+
+    private string GetSortTitle(AudioRecord r) => string.IsNullOrEmpty(r.AlternativeTitle) ? r.Title : r.AlternativeTitle;
+
+    private int GetSortGroup(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return 1;
+        var firstChar = text.TrimStart().FirstOrDefault();
+        return char.IsLetter(firstChar) ? 0 : 1;
+    }
+
+    private async Task LoadAudioRecordsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // Load sterilization tags
+            var sterilizationStr = await SettingsService.GetSettingAsync("StringSterilization");
+            if (!string.IsNullOrEmpty(sterilizationStr))
+            {
+                _sterilizationTags = sterilizationStr.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+            }
+
+            _audioRecords = await AudioService.GetAllAudioAsync();
+            foreach(var record in _audioRecords)
+            {
+                if (!string.IsNullOrEmpty(record.CoverArtPath) && System.IO.File.Exists(record.CoverArtPath))
+                {
+                    var ext = System.IO.Path.GetExtension(record.CoverArtPath).ToLowerInvariant();
+                    var mimeType = ext switch
+                    {
+                        ".png" => "image/png",
+                        ".webp" => "image/webp",
+                        ".gif" => "image/gif",
+                        _ => "image/jpeg"
+                    };
+                    
+                    try
+                    {
+                        var bytes = await System.IO.File.ReadAllBytesAsync(record.CoverArtPath);
+                        _coverArts[record.GUID] = $"data:{mimeType};base64,{Convert.ToBase64String(bytes)}";
+                    }
+                    catch
+                    {
+                        _coverArts[record.GUID] = "images/Assets/empty_cover.png";
+                    }
+                }
+                else
+                {
+                    _coverArts[record.GUID] = "images/Assets/empty_cover.png";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading audio: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+
+        await ApplyFiltersAsync();
+    }
+
+    private void ToggleMenu(string guid)
+    {
+        if (_openMenuGuid == guid) _openMenuGuid = null;
+        else _openMenuGuid = guid;
+    }
+
+    private async Task EnrichSingleAsync(AudioRecord record)
+    {
+        if (_enrichingGuids.Contains(record.GUID)) return;
+        
+        _enrichingGuids.Add(record.GUID);
+        _openMenuGuid = null;
+        StateHasChanged();
+
+        try
+        {
+            var result = await EnrichmentService.EnrichAudioAsync(record);
+            if (result.Success)
+            {
+                await LoadAudioRecordsAsync(); // Refresh UI
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Enrichment failed: {ex.Message}");
+        }
+        finally
+        {
+            _enrichingGuids.Remove(record.GUID);
+            StateHasChanged();
+        }
+    }
+
+    private async Task EnsureAudioBackupCreatedAsync(AudioRecord record)
+    {
+        try
+        {
+            var existing = await AudioService.GetAudioBackupAsync(record.GUID);
+            if (existing != null) return;
+
+            var backup = new AudioBackup
+            {
+                GUID = record.GUID,
+                AlternativeTitle = record.AlternativeTitle,
+                YoutubeID = record.YoutubeID,
+                Artist = record.Artist,
+                Album = record.Album,
+                Genre = record.Genre,
+                Year = record.Year,
+                CoverArtPath = record.CoverArtPath,
+                CreatedAt = DateTime.UtcNow
+            };
+            await AudioService.CreateAudioBackupAsync(backup);
+
+            // Backup cover art if it exists
+            if (!string.IsNullOrEmpty(record.CoverArtPath) && System.IO.File.Exists(record.CoverArtPath))
+            {
+                try
+                {
+                    var libraryPath = await SettingsService.GetSettingAsync("LibraryPath");
+                    if (!string.IsNullOrEmpty(libraryPath))
+                    {
+                        var backupFolder = Path.Combine(libraryPath, "Art", "Backup");
+                        if (!Directory.Exists(backupFolder)) Directory.CreateDirectory(backupFolder);
+
+                        var backupPath = Path.Combine(backupFolder, $"{record.GUID}.jpg");
+                        if (!System.IO.File.Exists(backupPath))
+                        {
+                            System.IO.File.Copy(record.CoverArtPath, backupPath);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to backup cover art: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"EnsureAudioBackupCreatedAsync failed: {ex.Message}");
+        }
+    }
+
+    private async Task RestoreOriginalAsync(AudioRecord record)
+    {
+        if (_enrichingGuids.Contains(record.GUID)) return;
+
+        _openMenuGuid = null;
+        _enrichingGuids.Add(record.GUID);
+        StateHasChanged();
+
+        try
+        {
+            var result = await EnrichmentService.RestoreAudioAsync(record);
+            if (result.Success)
+            {
+                await LoadAudioRecordsAsync(); // Refresh UI
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Restoration failed: {ex.Message}");
+        }
+        finally
+        {
+            _enrichingGuids.Remove(record.GUID);
+            StateHasChanged();
+        }
+    }
+
+    private async Task EnrichAllAsync()
+    {
+        if (_isEnrichingAll) return;
+        
+        _isEnrichingAll = true;
+        _globalProgress = 0;
+        _globalProgressMessage = "Starting enrichment...";
+        StateHasChanged();
+
+        try
+        {
+            await EnrichmentService.EnrichAllAudioAsync((msg, progress) => {
+                _globalProgressMessage = msg;
+                _globalProgress = progress;
+                StateHasChanged();
+            });
+            
+            await LoadAudioRecordsAsync(); // Refresh final state
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Global enrichment failed: {ex.Message}");
+        }
+        finally
+        {
+            _isEnrichingAll = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleSelectionMode()
+    {
+        _isSelectionMode = !_isSelectionMode;
+        if (!_isSelectionMode) _selectedGuids.Clear();
+        _showDeleteConfirm = false;
+        StateHasChanged();
+    }
+
+    private void HandleAudioCardClick(AudioRecord record)
+    {
+        if (_isSelectionMode)
+        {
+            ToggleAudioSelection(record.GUID);
+        }
+        else
+        {
+            OpenMetadataEdit(record);
+        }
+    }
+
+    private void ToggleAudioSelection(string guid)
+    {
+        if (!_isSelectionMode) return;
+        if (_selectedGuids.Contains(guid)) _selectedGuids.Remove(guid);
+        else
+        {
+            var record = _audioRecords?.FirstOrDefault(r => r.GUID == guid);
+            if (record != null && IsRecordLocked(record)) return;
+            _selectedGuids.Add(guid);
+        }
+        _showDeleteConfirm = false;
+        StateHasChanged();
+    }
+
+    private void SelectAll()
+    {
+        if (_audioRecords == null) return;
+        foreach (var record in _audioRecords)
+        {
+            if (!IsRecordLocked(record))
+                _selectedGuids.Add(record.GUID);
+        }
+        _showDeleteConfirm = false;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDeleteSelectedAsync()
+    {
+        if (_selectedGuids.Count == 0 || _isEnrichingAll) return;
+
+        _showDeleteConfirm = false;
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var guidsToDelete = _selectedGuids.ToList();
+            // Safety: exclude any locked records
+            var audioLookup = _audioRecords?.Where(r => guidsToDelete.Contains(r.GUID)).ToDictionary(r => r.GUID);
+            var nonLocked = guidsToDelete.Where(g => audioLookup == null || !audioLookup.ContainsKey(g) || !IsRecordLocked(audioLookup[g])).ToList();
+            foreach (var guid in nonLocked)
+            {
+                await AudioService.DeleteAudioAsync(guid);
+            }
+            _selectedGuids.Clear();
+            _isSelectionMode = false;
+            await LoadAudioRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Batch deletion failed: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void DeleteSingleAudioAsync(AudioRecord record)
+    {
+        _openMenuGuid = null;
+        _recordToDelete = record;
+        StateHasChanged();
+    }
+
+    private void CancelDeleteSingle()
+    {
+        _recordToDelete = null;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDeleteSingleAsync()
+    {
+        if (_recordToDelete == null) return;
+
+        var record = _recordToDelete;
+        _recordToDelete = null;
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            await AudioService.DeleteAudioAsync(record.GUID);
+            await LoadAudioRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to delete audio record: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenMetadataEdit(AudioRecord record)
+    {
+        _openMenuGuid = null;
+        _editMetadataRecord = record;
+        _editTitle = record.AlternativeTitle ?? record.Title;
+        _editArtist = record.Artist ?? "";
+        _editAlbum = record.Album ?? "";
+        _editGenre = record.Genre ?? "";
+        _editYear = record.Year;
+        _editCoverArtBase64 = _coverArts.TryGetValue(record.GUID, out var b64) ? b64 : "";
+        _editCoverArtPath = record.CoverArtPath ?? "";
+        _hasNewCoverArtUploaded = false;
+        _uploadedCoverArtBytes = null;
+        _uploadedCoverArtFileName = "";
+        _isSavingMetadata = false;
+
+        _editingTitleMode = false;
+        _editingArtistMode = false;
+        _editingAlbumMode = false;
+        _editingGenreMode = false;
+        _editingYearMode = false;
+
+        StateHasChanged();
+    }
+
+    private void OnTitleKeyDown(KeyboardEventArgs e) { if (e.Key == "Enter") _editingTitleMode = false; }
+    private void OnArtistKeyDown(KeyboardEventArgs e) { if (e.Key == "Enter") _editingArtistMode = false; }
+    private void OnAlbumKeyDown(KeyboardEventArgs e) { if (e.Key == "Enter") _editingAlbumMode = false; }
+    private void OnGenreKeyDown(KeyboardEventArgs e) { if (e.Key == "Enter") _editingGenreMode = false; }
+    private void OnYearKeyDown(KeyboardEventArgs e) { if (e.Key == "Enter") _editingYearMode = false; }
+
+    private void CloseMetadataEdit()
+    {
+        _editMetadataRecord = null;
+        StateHasChanged();
+    }
+
+    private async Task PickCoverArtNativeAsync()
+    {
+        try
+        {
+            var options = new PickOptions
+            {
+                PickerTitle = "Select Cover Art Image",
+                FileTypes = FilePickerFileType.Images
+            };
+
+            var result = await FilePicker.Default.PickAsync(options);
+            if (result != null)
+            {
+                _uploadedCoverArtFileName = result.FileName;
+                
+                using var stream = await result.OpenReadAsync();
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                _uploadedCoverArtBytes = ms.ToArray();
+                _hasNewCoverArtUploaded = true;
+
+                var ext = Path.GetExtension(result.FileName).ToLowerInvariant();
+                var mimeType = ext switch
+                {
+                    ".png" => "image/png",
+                    ".webp" => "image/webp",
+                    _ => "image/jpeg"
+                };
+                _editCoverArtBase64 = $"data:{mimeType};base64,{Convert.ToBase64String(_uploadedCoverArtBytes)}";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to pick native file: {ex.Message}");
+        }
+    }
+
+    private string FormatFileSize(long? bytes)
+    {
+        if (!bytes.HasValue) return "N/A";
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        double len = bytes.Value;
+        int order = 0;
+        while (len >= 1024 && order < suffixes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+        return $"{len:0.##} {suffixes[order]}";
+    }
+
+    private string FormatDuration(double? seconds)
+    {
+        if (!seconds.HasValue || seconds.Value <= 0) return "N/A";
+        return TimeSpan.FromSeconds(seconds.Value).ToString(@"hh\:mm\:ss");
+    }
+
+    private bool IsRecordLocked(AudioRecord record)
+    {
+        if (record == null) return false;
+        return record.EnrichmentStatus == 3 || record.EnrichmentStatus >= 10;
+    }
+
+    private string GetStatusClass(int status)
+    {
+        if (status >= 10 || status == 3) return "disabled";
+        return status switch
+        {
+            1 => "full",
+            2 => "partial",
+            4 => "manual",
+            _ => "standard"
+        };
+    }
+
+    private string GetStatusTitle(int status)
+    {
+        if (status >= 10 || status == 3) return "Enrichment locked";
+        return status switch
+        {
+            1 => "Fully enriched",
+            2 => "Partially enriched",
+            4 => "Manually edited",
+            _ => "No enrichment"
+        };
+    }
+
+    private string GetStatusText(int status)
+    {
+        if (status >= 10 || status == 3) return "Locked";
+        return status switch
+        {
+            1 => "Full",
+            2 => "Partial",
+            4 => "Manual",
+            _ => "Standard"
+        };
+    }
+
+    private async Task SaveMetadataChangesAsync()
+    {
+        if (_editMetadataRecord == null || _isSavingMetadata) return;
+        if (IsRecordLocked(_editMetadataRecord)) return;
+
+        _isSavingMetadata = true;
+        StateHasChanged();
+
+        try
+        {
+            var record = _editMetadataRecord;
+
+            // Create backup before first modification (preserves original data before manual edits)
+            if (record.EnrichmentStatus != 4)
+            {
+                await EnsureAudioBackupCreatedAsync(record);
+            }
+
+            record.Title = _editTitle;
+            record.AlternativeTitle = _editTitle;
+            record.Artist = _editArtist;
+            record.Album = _editAlbum;
+            record.Genre = _editGenre;
+            record.Year = _editYear;
+            record.EnrichmentStatus = 4; // Set to Manual
+
+            if (_hasNewCoverArtUploaded && _uploadedCoverArtBytes != null)
+            {
+                using var ms = new MemoryStream(_uploadedCoverArtBytes);
+                var savedPath = await AudioService.SaveCoverArtAsync(record.GUID, ms);
+                record.CoverArtPath = savedPath;
+            }
+
+            await AudioService.UpdateAudioRecordAsync(record);
+            await AudioService.UpdatePhysicalTagsAsync(record);
+
+            _editMetadataRecord = null;
+            await LoadAudioRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to save metadata: {ex.Message}");
+        }
+        finally
+        {
+            _isSavingMetadata = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task EnrichSelectedAsync()
+    {
+        if (_selectedGuids.Count == 0 || _isEnrichingAll) return;
+        
+        // Exclude tracks that are locked
+        var toEnrich = _audioRecords.Where(r => _selectedGuids.Contains(r.GUID) && !IsRecordLocked(r)).ToList();
+        if (toEnrich.Count == 0) return;
+
+        _isEnrichingAll = true;
+        _globalProgress = 0;
+        int current = 0;
+        int total = toEnrich.Count;
+        
+        _isSelectionMode = false; // Turn off selection mode while processing
+        
+        try 
+        {
+            foreach (var record in toEnrich)
+            {
+                current++;
+                _globalProgressMessage = $"Processing: {record.Title}";
+                _globalProgress = (double)current / total;
+                StateHasChanged();
+                
+                await EnrichmentService.EnrichAudioAsync(record);
+            }
+            await LoadAudioRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Selected enrichment failed: {ex.Message}");
+        }
+        finally
+        {
+            _isEnrichingAll = false;
+            _selectedGuids.Clear();
+            StateHasChanged();
+        }
+    }
+}

@@ -1,8 +1,34 @@
 .home-container {
     display: flex;
-    min-height: 100vh;
-    background-color: #0f0f0f;
-    color: white;
+    height: 100vh;
+    background-color: #0d0d0d;
+    color: inherit;
+    position: relative;
+    overflow: hidden;
+    text-shadow: var(--text-shadow-val), var(--text-outline-shadow);
+}
+
+.bg-layer {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 0;
+}
+
+.bg-layer.layer1 {
+    background-image: var(--bg-layer1);
+}
+
+.bg-layer.layer2 {
+    background-image: var(--bg-layer2);
+}
+
+.bg-layer.active {
+    opacity: 1;
 }
 
 .left-container {
@@ -11,13 +37,67 @@
     justify-content: center;
     align-items: center;
     width: 250px;
-    background-color: #1e1e1e;
+    height: 100vh;
     padding: 1rem 0;
+    z-index: 10;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.left-bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(30, 30, 30, var(--left-opacity, 0.6));
+    backdrop-filter: blur(var(--left-blur, 15px));
+    transition: background 0.3s ease, backdrop-filter 0.3s ease;
+    z-index: 1;
 }
 
 .right-container {
     flex: 1;
-    background-color: #121212;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+    z-index: 5;
+}
+
+/* Background Overlay for Right Container */
+.right-bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(18, 18, 18, var(--right-opacity, 0.6));
+    backdrop-filter: blur(var(--right-blur, 15px));
+    /* Removed backdrop-filter transition to prevent fighting with child elements */
+    transition: background 0.3s ease;
+    z-index: 1;
+}
+
+.right-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 2;
+}
+
+/* Premium Thin Scrollbar for Content Area */
+.right-content::-webkit-scrollbar {
+    width: 3px;
+}
+
+.right-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.right-content::-webkit-scrollbar-thumb {
+    background: var(--accent-base);
+    border-radius: 10px;
+    transition: background 0.3s;
+}
+
+.right-content::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-bright);
 }
 
 .menubutton-container {
@@ -26,8 +106,9 @@
     align-items: center;
     width: 100%;
     padding: 40px 0 40px 25px;
-    border-right: 2px solid #e8a30e;
+    border-right: 2px solid var(--accent-base);
     position: relative;
+    z-index: 2;
     box-sizing: border-box;
 }
 
@@ -38,7 +119,7 @@
     right: -3.2px;
     width: 4px;
     height: 4px;
-    background-color: #e8a30e;
+    background-color: var(--accent-base);
     border-radius: 50%;
 }
 
@@ -56,15 +137,21 @@
     margin: 5px 0;
     cursor: pointer;
     border-radius: 50px 0 0 50px;
-    background-color: #1e1e1e;
-    background-image: linear-gradient(to right, #e8a30e 50%, #1e1e1e 50%);
+    background-color: rgba(var(--card-bg-rgb), var(--menu-opacity));
+    background-image: linear-gradient(to right, var(--accent-base) 50%, rgba(var(--card-bg-rgb), var(--menu-opacity)) 50%);
+    backdrop-filter: blur(var(--menu-blur));
     background-size: 200.5% 100.5%;
     background-repeat: no-repeat;
     background-position: 100% 0%;
-    border: 1px solid #333;
-    color: white;
-    transition: all 0.2s ease-out;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+    border-right: none;
+    color: var(--general-text);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
+    padding-left: 20px;
+    text-align: left;
 }
 
 .menubutton::before,
@@ -73,7 +160,6 @@
     right: 20px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 12px;
     transition: opacity 0.2s ease-out, color 0.2s ease-out;
 }
 
@@ -89,33 +175,27 @@
     opacity: 0;
 }
 
-.menubutton:hover::before {
+.menubutton:hover::before,
+.menubutton.active::before {
     opacity: 0;
 }
 
-.menubutton:hover::after {
+.menubutton:hover::after,
+.menubutton.active::after {
     opacity: 1;
 }
 
 .menubutton:hover,
 .menubutton.active {
     background-position: 0% 0%;
-    color: #000;
-    border-color: #e8a30e;
-    box-shadow: 0 0 15px rgba(232, 163, 14, 0.4);
-}
-
-.menubutton.active::before {
-    opacity: 0;
-}
-
-.menubutton.active::after {
-    opacity: 1;
+    color: var(--accent-text);
+    text-shadow: var(--text-shadow-val);
+    border-color: var(--accent-base);
 }
 
 .separator {
     width: calc(100% - 40px);
-    background-color: #262626;
-    height: 2px;
-    margin: 20px 20px 20px 20px;
+    background-color: #333;
+    height: 1px;
+    margin: 20px;
 }

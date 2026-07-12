@@ -1,0 +1,25 @@
+offline synchronize via USB :
+user can connect devices to USB (phone / DAP / external drive), read as file transfer mode.
+app can select a folder on that device, then synchronize the media files inside between desktop library and device folder library.
+
+future possibility :
+wireless synchronize by local network
+
+
+must have feature :
+- playlist watcher, any playlist from youtube can be added, and on the list, add 2 button to apply watcher on audio, video, or both. need scheduler for interval watching. watcher will download audio/video/both if new list is added. the logic is for yt-dlp to download the playlist list first, check if there is new, then if there is new ones, then download that. so system doesnt have to redownload whole list and take out that already existed.
+- about page!
+- versioning and updating to check on github release.
+- API for future development possibility.
+ 
+fixing :
+- change the studio name on the codes! from "reversedhorizonstudio" or similar to that, to vantaseed.
+- delete popup layout between audio and video is wildly different. need to be the same
+- on metadata details, for the audio, the vinyl disc too much smaller compared to the sleeve. on the cards, it almost bigger, only few pixel difference (so it gives illusion that the disk is slides inside the sleeve). make the metadata details disc and sleeve same size and ratio with the one in the music cards.
+- same thing as the vhs tape in metadata details video page. both animation in audio and video metadata details also doesnt pop out the same. in metadata details the disc and tape is not too popped out.
+- alternatives title doesnt make any sense. remove it for both video and audio. make sure cleaning up the remnants as well.
+- app icon!
+- in video page, switch position of playlist dropdown and status dropdown.
+- batch locking on batch select feature.
+- in video three-dots popup menu, delete function is not separated by separator unlike on the audio cards menu.
+- batch take out from one of the playlist (batch playlist takeout option only appear when playlist dropdown is not all, all playlist, or no playlist. means it has to select one playlist).

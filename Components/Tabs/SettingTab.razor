@@ -1,18 +1,20 @@
 @using Autonomuse.ViewModels
 @inject SettingViewModel ViewModel
+@inject IJSRuntime JS
 
 <div class="tab-content">
     <div class="header">
-        <h1>Application Settings</h1>
+        <h1>Settings</h1>
         <p>Configure your Autonomuse experience</p>
     </div>
+    
     <div class="settings-grid">
-        <div class="settings-card">
+        <div class="glass-card full-width">
             <h2 class="card-title">Library Storage</h2>
             
             <div class="setting-item">
                 <label for="library-path">Default Library Path</label>
-                <div class="input-group">
+                <div class="input-group library-path-input">
                     <input type="text" id="library-path" placeholder="C:\Users\..." value="@ViewModel.CurrentPath" readonly>
                     <button class="pill-button" @onclick="ViewModel.UpdatePathAsync">Browse</button>
                 </div>
@@ -36,7 +38,7 @@
                                     }
                                     else
                                     {
-                                        <button class="icon-button warning-btn wide-btn" @onclick="() => ViewModel.RecreatePathAsync(item)" title="Folder missing. Click to recreate and switch">
+                                        <button class="icon-button" @onclick="() => ViewModel.RecreatePathAsync(item)" title="Folder missing. Click to recreate and switch">
                                             <span class="action-icon">✚📁</span>
                                         </button>
                                     }
@@ -50,12 +52,714 @@
                 </div>
             }
         </div>
+
+        @if (ViewModel.IsDebugMode)
+        {
+            <div class="glass-card full-width">
+                <h2 class="card-title">Development Tools</h2>
+                <div class="setting-item row-between">
+                    <div>
+                        <label>Wipe All Media Data</label>
+                        <p class="setting-desc">Permanently delete all uploaded files and clear all media database records.</p>
+                    </div>
+                    <div class="setting-control">
+                        @if (!_showClearConfirm)
+                        {
+                            <button class="pill-button danger" @onclick="() => _showClearConfirm = true">Clear All Uploaded Data</button>
+                        }
+                        else
+                        {
+                            <div class="confirm-group">
+                                <span class="confirm-text">Delete everything?</span>
+                                <button class="pill-button muted-danger" @onclick="OnConfirmClear">Confirm Delete</button>
+                                <button class="pill-button bright-white" @onclick="() => _showClearConfirm = false">Cancel</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        
+        <div class="glass-card full-width">
+            <h2 class="card-title">Image Processing</h2>
+            
+            <div class="personalization-columns">
+                <!-- Left: Image Compression -->
+                <div class="perso-column">
+                    <div class="setting-item">
+                        <label>Image Compression</label>
+                        <p class="setting-desc">Compress images during upload to save storage space.</p>
+                        <p class="setting-desc" style="color: var(--accent-base); opacity: 0.8; font-style: italic;">Current compression level: @(ViewModel.ImageCompressionLevel)%</p>
+                        
+                        <div class="toggle-group full-width mt-1">
+                            @foreach (var level in new[] { 0, 20, 40, 60, 80 })
+                            {
+                                <button class="toggle-btn level-btn @(ViewModel.ImageCompressionLevel == level ? "active" : "")" 
+                                        @onclick='() => { ViewModel.ImageCompressionLevel = level; }'>
+                                    @(level == 0 ? "No Compression" : level + "%")
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="perso-separator"></div>
+
+                <!-- Right: Cover Art Quality -->
+                <div class="perso-column">
+                    <div class="setting-item">
+                        <label>Enrichment Cover Art Quality</label>
+                        <p class="setting-desc">Choose the resolution for downloaded cover art during enrichment.</p>
+                        <p class="setting-desc" style="color: var(--accent-base); opacity: 0.8; font-style: italic;">Note: High quality images may increase enrichment time and storage usage.</p>
+                        
+                        <div class="toggle-group full-width mt-1">
+                            <button class="toggle-btn @(ViewModel.CoverArtQuality == "standard" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.CoverArtQuality = "standard"; }'>
+                                Standard Quality
+                            </button>
+                            <button class="toggle-btn @(ViewModel.CoverArtQuality == "high" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.CoverArtQuality = "high"; }'>
+                                High Quality
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card full-width">
+            <h2 class="card-title">Audio & Video Title Sterilization</h2>
+            <div class="setting-item">
+                <p class="setting-desc">Define words or symbols to automatically remove from media titles (e.g., "[OFFICIAL]", "(MV)"). Press comma or Enter to add.</p>
+                <div class="sterilization-container">
+                    <div class="tags-input-area">
+                        @foreach (var tag in ViewModel.SterilizationTags)
+                        {
+                            <span class="tag-pill" title="@tag">
+                                @(tag.Length > 30 ? tag.Substring(0, 27) + "..." : tag)
+                                <button class="remove-tag" @onclick="() => ViewModel.RemoveSterilizationTagAsync(tag)">×</button>
+                            </span>
+                        }
+                        <input type="text" 
+                               class="tag-input" 
+                               placeholder="Add word..." 
+                               @bind="ViewModel.SterilizationInput" 
+                               @bind:event="oninput"
+                               @onkeyup="HandleSterilizationKeyUp" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card full-width">
+            <h2 class="card-title">Development Tools & Updates</h2>
+            <div class="setting-item">
+                <p class="setting-desc">Required tools to run background downloads and audio fingerprinting. Updates are performed silently via winget.</p>
+                
+                @if (!string.IsNullOrEmpty(ViewModel.ToolStatusMessage))
+                {
+                    <div class="tool-update-status @(ViewModel.ToolStatusMessage.StartsWith("SUCCESS:") ? "success" : ViewModel.ToolStatusMessage.StartsWith("ERROR:") ? "error" : "info")">
+                        <div class="status-left">
+                            @if (ViewModel.ToolStatusMessage.StartsWith("SUCCESS:"))
+                            {
+                                <span class="status-icon icon-success">✔</span>
+                            }
+                            else if (ViewModel.ToolStatusMessage.StartsWith("ERROR:"))
+                            {
+                                <span class="status-icon icon-error">✖</span>
+                            }
+                            else if (ViewModel.ToolStatusMessage.StartsWith("WARN:"))
+                            {
+                                <span class="status-icon icon-warning">⚠</span>
+                            }
+                            <span class="status-text">@GetStatusDisplayMessage(ViewModel.ToolStatusMessage)</span>
+                        </div>
+                        <button class="status-close-btn" @onclick='() => ViewModel.ToolStatusMessage = ""'>×</button>
+                    </div>
+                }
+
+                <div class="tools-list">
+                    <!-- yt-dlp -->
+                    <div class="tool-row">
+                        <div class="tool-info">
+                            <span class="tool-name">YouTube Downloader (yt-dlp)</span>
+                            <div class="tool-meta">
+                                <span class="tool-version">Version: @ViewModel.YtDlpVersion</span>
+                                <span class="tool-badge @(!ViewModel.IsYtDlpReady ? "missing" : ViewModel.IsYtDlpOutdated ? "outdated" : "ready")">
+                                    @(!ViewModel.IsYtDlpReady ? "Not Installed" : ViewModel.IsYtDlpOutdated ? "Out of Date" : "Ready")
+                                </span>
+                            </div>
+                        </div>
+                        <button class="pill-button @(!ViewModel.IsYtDlpReady || ViewModel.IsYtDlpOutdated ? "accent" : "")" 
+                                disabled="@(ViewModel.IsUpdatingTools || ViewModel.IsCheckingForUpdates)"
+                                @onclick='() => !ViewModel.IsYtDlpReady || ViewModel.IsYtDlpOutdated ? ViewModel.UpdateToolAsync("yt-dlp") : ViewModel.ReCheckToolAsync("yt-dlp")'>
+                            @(ViewModel.UpdatingToolName == "yt-dlp" ? "Updating..." : ViewModel.CheckingToolName == "yt-dlp" ? "Checking..." : !ViewModel.IsYtDlpReady ? "Install" : ViewModel.IsYtDlpOutdated ? "Update" : "Re-check")
+                        </button>
+                    </div>
+
+                    <!-- Chromaprint -->
+                    <div class="tool-row">
+                        <div class="tool-info">
+                            <span class="tool-name">Audio Fingerprinter (Chromaprint)</span>
+                            <div class="tool-meta">
+                                <span class="tool-version">Version: @ViewModel.ChromaprintVersion</span>
+                                <span class="tool-badge @(!ViewModel.IsFpCalcReady ? "missing" : ViewModel.IsFpCalcOutdated ? "outdated" : "ready")">
+                                    @(!ViewModel.IsFpCalcReady ? "Not Installed" : ViewModel.IsFpCalcOutdated ? "Out of Date" : "Ready")
+                                </span>
+                            </div>
+                        </div>
+                        <button class="pill-button @(!ViewModel.IsFpCalcReady || ViewModel.IsFpCalcOutdated ? "accent" : "")" 
+                                disabled="@(ViewModel.IsUpdatingTools || ViewModel.IsCheckingForUpdates)"
+                                @onclick='() => !ViewModel.IsFpCalcReady || ViewModel.IsFpCalcOutdated ? ViewModel.UpdateToolAsync("fpcalc") : ViewModel.ReCheckToolAsync("fpcalc")'>
+                            @(ViewModel.UpdatingToolName == "fpcalc" ? "Updating..." : ViewModel.CheckingToolName == "fpcalc" ? "Checking..." : !ViewModel.IsFpCalcReady ? "Install" : ViewModel.IsFpCalcOutdated ? "Update" : "Re-check")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card full-width">
+            <h2 class="card-title">Personalization</h2>
+            
+            <div class="personalization-columns">
+                @* Left Column: Theme & Colors *@
+                <div class="perso-column">
+                    <div class="color-pickers-row">
+                        <div class="setting-item">
+                            <div>
+                                <label for="accent-picker">Accent Color</label>
+                                <p class="setting-desc">Primary theme color for buttons & icons.</p>
+                            </div>
+                            <div class="color-picker-container">
+                                <input type="color" id="accent-picker" class="accent-color-input" @bind="ViewModel.CurrentAccentColor" />
+                                <span class="color-hex">@ViewModel.CurrentAccentColor</span>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div>
+                                <label for="card-picker">Panel Color</label>
+                                <p class="setting-desc">Base color panels.</p>
+                            </div>
+                            <div class="color-picker-container">
+                                <input type="color" id="card-picker" class="accent-color-input" 
+                                       @bind="ViewModel.UiSettings.CardColor" 
+                                       @bind:after="async () => { await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }" />
+                                <span class="color-hex">@ViewModel.UiSettings.CardColor</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div>
+                            <label>Contrast Text Color</label>
+                            <p class="setting-desc">Choose the color for text that appears on top of your accent color.</p>
+                        </div>
+                        <div class="text-color-selector">
+                            <button class="text-opt @(!ViewModel.IsAccentTextWhite ? "selected" : "")" 
+                                    @onclick="async () => { ViewModel.IsAccentTextWhite = false; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }">
+                                <span class="sample sample-black-on-accent">ABC</span>
+                                Black Text
+                            </button>
+                            <button class="text-opt @(ViewModel.IsAccentTextWhite ? "selected" : "")" 
+                                    @onclick="async () => { ViewModel.IsAccentTextWhite = true; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }">
+                                <span class="sample sample-white-on-accent">ABC</span>
+                                White Text
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <div>
+                            <label>General Text Styling</label>
+                            <p class="setting-desc">Set the color and style for all non-accented text in the application.</p>
+                        </div>
+                        <div class="text-color-selector">
+                            <button class="text-opt @(ViewModel.UiSettings.GeneralTextColor == "#ffffff" ? "selected" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.GeneralTextColor = "#ffffff"; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                <span class="sample sample-white">ABC</span>
+                                White
+                            </button>
+                            <button class="text-opt @(ViewModel.UiSettings.GeneralTextColor == "#000000" ? "selected" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.GeneralTextColor = "#000000"; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                <span class="sample sample-black">ABC</span>
+                                Black
+                            </button>
+                            <button class="text-opt @(ViewModel.UiSettings.GeneralTextColor == "#888888" ? "selected" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.GeneralTextColor = "#888888"; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                <span class="sample sample-grey">ABC</span>
+                                Grey
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="perso-separator"></div>
+
+                @* Right Column: Text Effects *@
+                <div class="perso-column">
+                    <div class="setting-item row-between">
+                        <div>
+                            <label>Text Shadow</label>
+                            <p class="setting-desc">Add a subtle drop shadow to text.</p>
+                        </div>
+                        <div class="toggle-group">
+                            <button class="toggle-btn @(!ViewModel.UiSettings.EnableTextShadow ? "active" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.EnableTextShadow = false; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                Disabled
+                            </button>
+                            <button class="toggle-btn @(ViewModel.UiSettings.EnableTextShadow ? "active" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.EnableTextShadow = true; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                Enabled
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (ViewModel.UiSettings.EnableTextShadow)
+                    {
+                        <div class="setting-item mt-1">
+                            <label>Shadow Level (@(Math.Round(ViewModel.UiSettings.TextShadowOpacity * 100))%)</label>
+                            <div class="toggle-group full-width">
+                                @foreach (var level in new[] { 0.25f, 0.5f, 0.75f, 1f })
+                                {
+                                    <button class="toggle-btn level-btn @(Math.Abs(ViewModel.UiSettings.TextShadowOpacity - level) < 0.01 ? "active" : "")" 
+                                            @onclick='async () => { ViewModel.UiSettings.TextShadowOpacity = level; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                        @(Math.Round(level * 100))%
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="separator wide my-1"></div>
+
+                    <div class="setting-item row-between">
+                        <div>
+                            <label>Text Outline</label>
+                            <p class="setting-desc">Add a stroke around each letter for maximum contrast.</p>
+                        </div>
+                        <div class="toggle-group">
+                            <button class="toggle-btn @(!ViewModel.UiSettings.EnableTextOutline ? "active" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.EnableTextOutline = false; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                Disabled
+                            </button>
+                            <button class="toggle-btn @(ViewModel.UiSettings.EnableTextOutline ? "active" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.EnableTextOutline = true; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                Enabled
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (ViewModel.UiSettings.EnableTextOutline)
+                    {
+                        <div class="compact-row">
+                            <div class="setting-item w-25">
+                                <label>Color</label>
+                                <div class="toggle-group full-width">
+                                    <button class="toggle-btn @(ViewModel.UiSettings.TextOutlineColor == "#000000" ? "active" : "")" 
+                                            @onclick='async () => { ViewModel.UiSettings.TextOutlineColor = "#000000"; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                        Black
+                                    </button>
+                                    <button class="toggle-btn @(ViewModel.UiSettings.TextOutlineColor == "#ffffff" ? "active" : "")" 
+                                            @onclick='async () => { ViewModel.UiSettings.TextOutlineColor = "#ffffff"; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                        White
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="setting-item w-75">
+                                <label>Outline Level (@(Math.Round(ViewModel.UiSettings.TextOutlineOpacity * 100))%)</label>
+                                <div class="toggle-group full-width">
+                                    @foreach (var level in new[] { 0.25f, 0.5f, 0.75f, 1f })
+                                    {
+                                        <button class="toggle-btn level-btn @(Math.Abs(ViewModel.UiSettings.TextOutlineOpacity - level) < 0.01 ? "active" : "")" 
+                                                @onclick='async () => { ViewModel.UiSettings.TextOutlineOpacity = level; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                            @(Math.Round(level * 100))%
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="separator wide my-1"></div>
+
+                    <div class="setting-item row-between">
+                        <div>
+                            <label>Header Text Customization</label>
+                            <p class="setting-desc">Add a background and cutomization for header text.</p>
+                        </div>
+                        <div class="toggle-group">
+                            <button class="toggle-btn @(!ViewModel.UiSettings.EnableHeaderBackground ? "active" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.EnableHeaderBackground = false; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                Disabled
+                            </button>
+                            <button class="toggle-btn @(ViewModel.UiSettings.EnableHeaderBackground ? "active" : "")" 
+                                    @onclick='async () => { ViewModel.UiSettings.EnableHeaderBackground = true; await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }'>
+                                Enabled
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (ViewModel.UiSettings.EnableHeaderBackground)
+                    {
+                        <div class="header-custom-container mt-1">
+                            @* Section 1: Appearance *@
+                            <div class="custom-sub-section">
+                                <div class="section-label">APPEARANCE</div>
+                                <div class="compact-row">
+                                    <div class="setting-item w-33">
+                                        <div class="inline-label">
+                                            <label>Transparency</label>
+                                            <span class="val-badge">@(Math.Round((1 - ViewModel.UiSettings.HeaderBackgroundOpacity) * 100))%</span>
+                                        </div>
+                                        <input class="header-slider" type="range" min="0" max="1" step="0.01"
+                                               value="@(1 - ViewModel.UiSettings.HeaderBackgroundOpacity)" 
+                                               @oninput='(e) => { ViewModel.UiSettings.HeaderBackgroundOpacity = 1 - float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.HeaderBackgroundOpacity = 1 - float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                    <div class="setting-item w-33">
+                                        <div class="inline-label">
+                                            <label>Corner Radius</label>
+                                            <span class="val-badge">@(Math.Round(ViewModel.UiSettings.HeaderBackgroundRadius))px</span>
+                                        </div>
+                                        <input class="header-slider" type="range" min="0" max="100" step="1"
+                                               value="@ViewModel.UiSettings.HeaderBackgroundRadius" 
+                                               @oninput='(e) => { ViewModel.UiSettings.HeaderBackgroundRadius = float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.HeaderBackgroundRadius = float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                    <div class="setting-item w-33">
+                                        <div class="inline-label">
+                                            <label>Background Color</label>
+                                        </div>
+                                        <div class="color-picker-mini">
+                                            <input type="color" @bind="ViewModel.UiSettings.HeaderBackgroundColor" 
+                                                   @bind:after="async () => { await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }" />
+                                            <span>@ViewModel.UiSettings.HeaderBackgroundColor</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @* Section 2: Typography *@
+                            <div class="custom-sub-section mt-1">
+                                <div class="section-label">TYPOGRAPHY</div>
+                                <div class="compact-row">
+                                    <div class="setting-item w-33">
+                                        <div class="inline-label">
+                                            <label>Header Size</label>
+                                            <span class="val-badge">@(Math.Round(ViewModel.UiSettings.HeaderFontSize))px</span>
+                                        </div>
+                                        <input class="header-slider" type="range" min="10" max="50" step="1"
+                                               value="@ViewModel.UiSettings.HeaderFontSize" 
+                                               @oninput='(e) => { ViewModel.UiSettings.HeaderFontSize = float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.HeaderFontSize = float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                    <div class="setting-item w-33">
+                                        <div class="inline-label">
+                                            <label>Subheading Size</label>
+                                            <span class="val-badge">@(Math.Round(ViewModel.UiSettings.SubheadingFontSize))px</span>
+                                        </div>
+                                        <input class="header-slider" type="range" min="10" max="50" step="1"
+                                               value="@ViewModel.UiSettings.SubheadingFontSize" 
+                                               @oninput='(e) => { ViewModel.UiSettings.SubheadingFontSize = float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.SubheadingFontSize = float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                    <div class="setting-item w-33">
+                                        <div class="inline-label">
+                                            <label>Subheading Color</label>
+                                        </div>
+                                        <div class="color-picker-mini">
+                                            <input type="color" @bind="ViewModel.UiSettings.SubheadingTextColor" 
+                                                   @bind:after="async () => { await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }" />
+                                            <span>@ViewModel.UiSettings.SubheadingTextColor</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @* Section 3: Padding Inspector *@
+                            <div class="custom-sub-section mt-1">
+                                <div class="section-label">PADDING INSPECTOR</div>
+                                <div class="padding-grid">
+                                    <div class="padding-item">
+                                        <div class="inline-label small">
+                                            <label>Top</label>
+                                            <span class="val-badge">@(Math.Round(ViewModel.UiSettings.HeaderPaddingTop))px</span>
+                                        </div>
+                                        <input type="range" min="0" max="50" step="1"
+                                               value="@ViewModel.UiSettings.HeaderPaddingTop" 
+                                               @oninput='(e) => { ViewModel.UiSettings.HeaderPaddingTop = float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.HeaderPaddingTop = float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                    <div class="padding-item">
+                                        <div class="inline-label small">
+                                            <label>Bottom</label>
+                                            <span class="val-badge">@(Math.Round(ViewModel.UiSettings.HeaderPaddingBottom))px</span>
+                                        </div>
+                                        <input type="range" min="0" max="50" step="1"
+                                               value="@ViewModel.UiSettings.HeaderPaddingBottom" 
+                                               @oninput='(e) => { ViewModel.UiSettings.HeaderPaddingBottom = float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.HeaderPaddingBottom = float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                    <div class="padding-item">
+                                        <div class="inline-label small">
+                                            <label>Left</label>
+                                            <span class="val-badge">@(Math.Round(ViewModel.UiSettings.HeaderPaddingLeft))px</span>
+                                        </div>
+                                        <input type="range" min="0" max="50" step="1"
+                                               value="@ViewModel.UiSettings.HeaderPaddingLeft" 
+                                               @oninput='(e) => { ViewModel.UiSettings.HeaderPaddingLeft = float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.HeaderPaddingLeft = float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                    <div class="padding-item">
+                                        <div class="inline-label small">
+                                            <label>Right</label>
+                                            <span class="val-badge">@(Math.Round(ViewModel.UiSettings.HeaderPaddingRight))px</span>
+                                        </div>
+                                        <input type="range" min="0" max="50" step="1"
+                                               value="@ViewModel.UiSettings.HeaderPaddingRight" 
+                                               @oninput='(e) => { ViewModel.UiSettings.HeaderPaddingRight = float.Parse(e.Value?.ToString() ?? "0"); OnSettingsChanged.InvokeAsync(); }'
+                                               @onchange='async (e) => { ViewModel.UiSettings.HeaderPaddingRight = float.Parse(e.Value?.ToString() ?? "0"); await ViewModel.UpdateUiSettingsAsync(); await OnSettingsChanged.InvokeAsync(); }' />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="separator wide"></div>
+
+            @* Sliders Section (Top of Home UI) *@
+            <div class="ui-sliders-layout">
+                <div class="config-group">
+                    <h3 class="config-subtitle">Sidebar</h3>
+                    <div class="setting-item">
+                        <label>Blur (@(ViewModel.UiSettings.LeftBlur)px)</label>
+                        <input type="range" min="0" max="50" step="1" 
+                               value="@ViewModel.UiSettings.LeftBlur" 
+                               @oninput='(e) => OnSliderInput(e, "LeftBlur")' 
+                               @onchange='(e) => OnSliderChange(e, "LeftBlur")' />
+                    </div>
+                    <div class="setting-item">
+                        <label>Sidebar Transparency (@(Math.Round((1 - ViewModel.UiSettings.LeftOpacity) * 100))%)</label>
+                        <input type="range" min="0" max="1" step="0.05" 
+                               value="@(1 - ViewModel.UiSettings.LeftOpacity)" 
+                               @oninput='(e) => OnSliderInput(e, "LeftOpacity")' 
+                               @onchange='(e) => OnSliderChange(e, "LeftOpacity")' />
+                    </div>
+                </div>
+
+                <div class="config-group">
+                    <h3 class="config-subtitle">Content</h3>
+                    <div class="setting-item">
+                        <label>Blur (@(ViewModel.UiSettings.RightBlur)px)</label>
+                        <input type="range" min="0" max="50" step="1" 
+                               value="@ViewModel.UiSettings.RightBlur" 
+                               @oninput='(e) => OnSliderInput(e, "RightBlur")' 
+                               @onchange='(e) => OnSliderChange(e, "RightBlur")' />
+                    </div>
+                    <div class="setting-item">
+                        <label>Transparency (@(Math.Round((1 - ViewModel.UiSettings.RightOpacity) * 100))%)</label>
+                        <input type="range" min="0" max="1" step="0.05" 
+                               value="@(1 - ViewModel.UiSettings.RightOpacity)" 
+                               @oninput='(e) => OnSliderInput(e, "RightOpacity")' 
+                               @onchange='(e) => OnSliderChange(e, "RightOpacity")' />
+                    </div>
+                </div>
+
+                <div class="config-group">
+                    <h3 class="config-subtitle">Panel Cards</h3>
+                    <div class="setting-item">
+                        <label>Blur (@(ViewModel.UiSettings.CardBlur)px)</label>
+                        <input type="range" min="0" max="50" step="1" 
+                               value="@ViewModel.UiSettings.CardBlur" 
+                               @oninput='(e) => OnSliderInput(e, "CardBlur")' 
+                               @onchange='(e) => OnSliderChange(e, "CardBlur")' />
+                    </div>
+                    <div class="setting-item">
+                        <label>Transparency (@(Math.Round((1 - ViewModel.UiSettings.CardOpacity) * 100))%)</label>
+                        <input type="range" min="0" max="1" step="0.01" 
+                               value="@(1 - ViewModel.UiSettings.CardOpacity)" 
+                               @oninput='(e) => OnSliderInput(e, "CardOpacity")' 
+                               @onchange='(e) => OnSliderChange(e, "CardOpacity")' />
+                    </div>
+                </div>
+
+                <div class="config-group">
+                    <h3 class="config-subtitle">Menu Buttons</h3>
+                    <div class="setting-item">
+                        <label>Blur (@(ViewModel.UiSettings.MenuBlur)px)</label>
+                        <input type="range" min="0" max="50" step="1" 
+                               value="@ViewModel.UiSettings.MenuBlur" 
+                               @oninput='(e) => OnSliderInput(e, "MenuBlur")' 
+                               @onchange='(e) => OnSliderChange(e, "MenuBlur")' />
+                    </div>
+                    <div class="setting-item">
+                        <label>Transparency (@(Math.Round((1 - ViewModel.UiSettings.MenuOpacity) * 100))%)</label>
+                        <input type="range" min="0" max="1" step="0.01" 
+                               value="@(1 - ViewModel.UiSettings.MenuOpacity)" 
+                               @oninput='(e) => OnSliderInput(e, "MenuOpacity")' 
+                               @onchange='(e) => OnSliderChange(e, "MenuOpacity")' />
+                    </div>
+                </div>
+            </div>
+
+            <div class="separator wide"></div>
+
+            @* Background Section (Bottom of Home UI) *@
+            <div class="ui-backgrounds-layout">
+                <div>
+                    <label>Tab Backgrounds</label>
+                    <p class="setting-desc">Assign unique images for each section.</p>
+                </div>
+                <div class="bg-picker-grid">
+                    @foreach (var tab in new[] { "Dashboard", "Audio", "Video", "Images", "Books", "Settings" })
+                    {
+                        if (!ViewModel.IsImageFeatureEnabled && tab == "Images") continue;
+                        if (!ViewModel.IsEbookFeatureEnabled && tab == "Books") continue;
+                        
+                        <div class="bg-item">
+                            <div class="pill-info">
+                                @if (ViewModel.TabThumbnails.TryGetValue(tab, out var thumb) && !string.IsNullOrEmpty(thumb))
+                                {
+                                    <img src="@thumb" class="bg-preview" alt="Preview" />
+                                }
+                                else
+                                {
+                                    <img src="images/Assets/nobackground.png" class="bg-preview empty" alt="No Background" />
+                                }
+                                <span class="tab-name">@tab</span>
+                            </div>
+                            <div class="bg-actions">
+                                <button class="pill-button mini" @onclick="() => ViewModel.PickBackgroundAsync(tab)">Change</button>
+                                @if (ViewModel.TabThumbnails.TryGetValue(tab, out var thumbExist) && !string.IsNullOrEmpty(thumbExist))
+                                {
+                                    <button class="remove-bg-btn" @onclick="() => ViewModel.RemoveBackgroundAsync(tab)" title="Remove background">
+                                        <img src="images/Assets/cross_red.png" alt="Remove" />
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="separator wide"></div>
+
+            <div class="setting-item row-between">
+                <div>
+                    <label>Reset Personalization</label>
+                    <p class="setting-desc">Revert all UI customizations to their original factory defaults.</p>
+                </div>
+                <div class="setting-control">
+                    @if (!_showResetConfirm)
+                    {
+                        <button class="pill-button danger" @onclick="() => _showResetConfirm = true">Reset Personalization</button>
+                    }
+                    else
+                    {
+                        <div class="confirm-group">
+                            <span class="confirm-text">Are you sure?</span>
+                            <button class="pill-button muted-danger" @onclick="OnConfirmReset">Confirm Reset</button>
+                            <button class="pill-button bright-white" @onclick="() => _showResetConfirm = false">Cancel</button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
+    [Parameter] public EventCallback OnSettingsChanged { get; set; }
+
     protected override void OnInitialized()
     {
-        ViewModel.PropertyChanged += (s, e) => StateHasChanged();
+        ViewModel.PropertyChanged += async (s, e) => {
+            await InvokeAsync(async () => {
+                if (e.PropertyName == nameof(ViewModel.UiSettings))
+                {
+                    await OnSettingsChanged.InvokeAsync();
+                }
+                StateHasChanged();
+            });
+        };
+    }
+
+    private async Task OnSliderInput(ChangeEventArgs e, string property)
+    {
+        if (float.TryParse(e.Value?.ToString(), out float val))
+        {
+            UpdateProperty(property, val);
+            
+            // Trigger UI refresh on Home.razor immediately
+            await OnSettingsChanged.InvokeAsync();
+        }
+    }
+
+    private async Task OnSliderChange(ChangeEventArgs e, string property)
+    {
+        if (float.TryParse(e.Value?.ToString(), out float val))
+        {
+            UpdateProperty(property, val);
+        }
+
+        // Final persist to database
+        await ViewModel.UpdateUiSettingsAsync();
+        await OnSettingsChanged.InvokeAsync();
+    }
+
+    private async Task HandleSterilizationKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "," || e.Key == "Enter")
+        {
+            await ViewModel.AddSterilizationTagAsync(ViewModel.SterilizationInput);
+        }
+    }
+
+    private void UpdateProperty(string property, float val)
+    {
+        switch (property)
+        {
+            case "LeftBlur": ViewModel.UiSettings.LeftBlur = val; break;
+            case "RightBlur": ViewModel.UiSettings.RightBlur = val; break;
+            case "CardBlur": ViewModel.UiSettings.CardBlur = val; break;
+            case "MenuBlur": ViewModel.UiSettings.MenuBlur = val; break;
+            case "LeftOpacity": ViewModel.UiSettings.LeftOpacity = 1 - val; break;
+            case "MenuOpacity": ViewModel.UiSettings.MenuOpacity = 1 - val; break;
+            case "RightOpacity": ViewModel.UiSettings.RightOpacity = 1 - val; break;
+            case "CardOpacity": ViewModel.UiSettings.CardOpacity = 1 - val; break;
+        }
+    }
+
+    private bool _showResetConfirm = false;
+    private bool _showClearConfirm = false;
+
+    private async Task OnConfirmReset()
+    {
+        await ViewModel.ResetPersonalizationAsync();
+        await OnSettingsChanged.InvokeAsync();
+        _showResetConfirm = false;
+    }
+
+    private async Task OnConfirmClear()
+    {
+        await ViewModel.ClearAllUploadedDataAsync();
+        _showClearConfirm = false;
+    }
+
+    private string GetStatusDisplayMessage(string rawMessage)
+    {
+        if (rawMessage.StartsWith("SUCCESS: ")) return rawMessage.Substring(9);
+        if (rawMessage.StartsWith("SUCCESS:")) return rawMessage.Substring(8);
+        if (rawMessage.StartsWith("ERROR: ")) return rawMessage.Substring(7);
+        if (rawMessage.StartsWith("ERROR:")) return rawMessage.Substring(6);
+        if (rawMessage.StartsWith("WARN: ")) return rawMessage.Substring(6);
+        if (rawMessage.StartsWith("WARN:")) return rawMessage.Substring(5);
+        if (rawMessage.StartsWith("INFO: ")) return rawMessage.Substring(6);
+        if (rawMessage.StartsWith("INFO:")) return rawMessage.Substring(5);
+        return rawMessage;
     }
 }

@@ -1,31 +1,34 @@
 .tab-content {
     padding: 2rem;
-    animation: slideUp 0.4s ease-out;
-    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: 'Asap Condensed', 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
 }
 
 .header h1 {
-    color: #e8a30e;
+    color: var(--accent-base);
     margin: 0;
     font-weight: 700;
-    font-size: 25px;
+    font-size: var(--header-font-size);
     text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: var(--text-shadow-val);
+    background: var(--header-bg);
+    padding: var(--header-padding);
+    border-radius: var(--header-radius);
+    box-decoration-break: var(--header-box-decoration);
+    -webkit-box-decoration-break: var(--header-box-decoration);
+    display: inline-block;
 }
 
 .header p {
-    color: #888;
-    margin-top: 0rem;
-    font-size: 1.1rem;
-}
-
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+    color: var(--subheading-color);
+    opacity: 1;
+    margin-top: 4px;
+    font-size: var(--subheading-font-size);
+    background: var(--header-bg);
+    padding: var(--header-padding);
+    border-radius: var(--header-radius);
+    box-decoration-break: var(--header-box-decoration);
+    -webkit-box-decoration-break: var(--header-box-decoration);
+    display: block;
+    width: fit-content;
 }

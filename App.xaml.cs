@@ -1,4 +1,4 @@
-﻿namespace Autonomuse
+namespace Autonomuse
 {
     public partial class App : Application
     {

@@ -1,17 +1,68 @@
 @page "/home"
 @using Autonomuse.Components.Tabs
+@using Autonomuse.Shared.Contracts
+@inject IHomeUIService UIService
+@inject ISettingsService SettingsService
+
+<style>
+    :root {
+        --left-blur: @(Settings.LeftBlur)px;
+        --left-opacity: @(Settings.LeftOpacity);
+        --right-blur: @(Settings.RightBlur)px;
+        --right-opacity: @(Settings.RightOpacity);
+        --card-blur: @(Settings.CardBlur)px;
+        --card-opacity: @(Settings.CardOpacity);
+        --card-color: @(Settings.CardColor);
+        --card-bg-rgb: @(ColorThemeService.HexToRgb(Settings.CardColor));
+        --card-bg: rgba(@(ColorThemeService.HexToRgb(Settings.CardColor)), @(Settings.CardOpacity));
+        --menu-blur: @(Settings.MenuBlur)px;
+        --menu-opacity: @(Settings.MenuOpacity);
+        --general-text: @(Settings.GeneralTextColor);
+        --text-shadow-val: @(Settings.EnableTextShadow ? $"0 2px 4px rgba(0,0,0,{Settings.TextShadowOpacity})" : "0 0 0 transparent");
+        @{
+            var outlineRgb = Settings.TextOutlineColor == "#ffffff" ? "255, 255, 255" : "0, 0, 0";
+            var outlineColor = $"rgba({outlineRgb}, {Settings.TextOutlineOpacity})";
+        }
+        --text-outline-shadow: @(Settings.EnableTextOutline ? $"0.03em 0.03em 0 {outlineColor}, -0.03em -0.03em 0 {outlineColor}, 0.03em -0.03em 0 {outlineColor}, -0.03em 0.03em 0 {outlineColor}" : "0 0 0 transparent");
+        --header-bg: @(Settings.EnableHeaderBackground ? $"rgba({ColorThemeService.HexToRgb(Settings.HeaderBackgroundColor)}, {Settings.HeaderBackgroundOpacity})" : "transparent");
+        --header-padding: @(Settings.EnableHeaderBackground ? $"{Settings.HeaderPaddingTop}px {Settings.HeaderPaddingRight}px {Settings.HeaderPaddingBottom}px {Settings.HeaderPaddingLeft}px" : "0px");
+        --header-radius: @(Settings.EnableHeaderBackground ? $"{Settings.HeaderBackgroundRadius}px" : "0px");
+        --header-font-size: @(Settings.EnableHeaderBackground ? $"{Settings.HeaderFontSize}px" : "25px");
+        --subheading-font-size: @(Settings.EnableHeaderBackground ? $"{Settings.SubheadingFontSize}px" : "1.1rem");
+        --subheading-color: @(Settings.SubheadingTextColor);
+        --header-box-decoration: @(Settings.EnableHeaderBackground ? "clone" : "unset");
+        --bg-layer1: url('@Layer1Bg');
+        --bg-layer2: url('@Layer2Bg');
+    }
+</style>
 
 <div class="home-container">
+    @* Background Layers for Cross-fade *@
+    <div class="bg-layer layer1 @(IsLayer1Active ? "active" : "")"></div>
+    <div class="bg-layer layer2 @(!IsLayer1Active ? "active" : "")"></div>
+
     <div class="left-container">
+        <div class="left-bg-overlay"></div>
         <div class="menubutton-container">
+            <button class="menubutton @(ActiveTab == TabType.Dashboard ? "active" : "")" 
+                    @onclick="() => SetTab(TabType.Dashboard)">Dashboard</button>
+            
+            <div class="separator"></div>
+            
             <button class="menubutton @(ActiveTab == TabType.Audio ? "active" : "")" 
                     @onclick="() => SetTab(TabType.Audio)">Audio</button>
             <button class="menubutton @(ActiveTab == TabType.Video ? "active" : "")" 
                     @onclick="() => SetTab(TabType.Video)">Video</button>
-            <button class="menubutton @(ActiveTab == TabType.Images ? "active" : "")" 
-                    @onclick="() => SetTab(TabType.Images)">Images</button>
-            <button class="menubutton @(ActiveTab == TabType.Books ? "active" : "")" 
-                    @onclick="() => SetTab(TabType.Books)">E-Books</button>
+            @if (IsImageFeatureEnabled)
+            {
+                <button class="menubutton @(ActiveTab == TabType.Images ? "active" : "")" 
+                        @onclick="() => SetTab(TabType.Images)">Images</button>
+            }
+            @if (IsEbookFeatureEnabled)
+            {
+                <button class="menubutton @(ActiveTab == TabType.Books ? "active" : "")" 
+                        @onclick="() => SetTab(TabType.Books)">E-Books</button>
+            }
             
             <div class="separator"></div>
             
@@ -19,31 +70,41 @@
                     @onclick="() => SetTab(TabType.Settings)">Settings</button>
         </div>
     </div>
+    
     <div class="right-container">
-        @switch (ActiveTab)
-        {
-            case TabType.Audio:
-                <AudioTab />
-                break;
-            case TabType.Video:
-                <VideoTab />
-                break;
-            case TabType.Images:
-                <ImageTab />
-                break;
-            case TabType.Books:
-                <BookTab />
-                break;
-            case TabType.Settings:
-                <SettingTab />
-                break;
-        }
+        @* Dedicated Background Overlay to prevent stacking filters on child elements *@
+        <div class="right-bg-overlay"></div>
+        
+        <div class="right-content">
+            @switch (ActiveTab)
+            {
+                case TabType.Dashboard:
+                    <DashboardTab />
+                    break;
+                case TabType.Audio:
+                    <AudioTab />
+                    break;
+                case TabType.Video:
+                    <VideoTab />
+                    break;
+                case TabType.Images:
+                    <ImageTab />
+                    break;
+                case TabType.Books:
+                    <BookTab />
+                    break;
+                case TabType.Settings:
+                    <SettingTab OnSettingsChanged="OnSettingsChanged" />
+                    break;
+            }
+        </div>
     </div>
 </div>
 
 @code {
     private enum TabType
     {
+        Dashboard,
         Audio,
         Video,
         Images,
@@ -51,10 +112,58 @@
         Settings
     }
 
-    private TabType ActiveTab { get; set; } = TabType.Audio;
+    private TabType ActiveTab { get; set; } = TabType.Dashboard;
+    private HomeUISettings Settings { get; set; } = new();
+    
+    // Cross-fade state
+    private string Layer1Bg { get; set; } = string.Empty;
+    private string Layer2Bg { get; set; } = string.Empty;
+    private bool IsLayer1Active { get; set; } = true;
+    private bool IsImageFeatureEnabled { get; set; } = false;
+    private bool IsEbookFeatureEnabled { get; set; } = false;
 
-    private void SetTab(TabType tab)
+    protected override async Task OnInitializedAsync()
     {
+        Settings = await UIService.GetSettingsAsync();
+        Layer1Bg = await UIService.GetBackgroundAsBase64Async(ActiveTab.ToString());
+        IsImageFeatureEnabled = SettingsService.IsImageFeatureEnabled;
+        IsEbookFeatureEnabled = SettingsService.IsEbookFeatureEnabled;
+    }
+
+    private async Task SetTab(TabType tab)
+    {
+        if (ActiveTab == tab) return;
+        
         ActiveTab = tab;
+        await UpdateBackground();
+    }
+
+    private async Task OnSettingsChanged()
+    {
+        Settings = await UIService.GetSettingsAsync();
+        // Force refresh the active layer
+        var newBg = await UIService.GetBackgroundAsBase64Async(ActiveTab.ToString());
+        if (IsLayer1Active) Layer1Bg = newBg; else Layer2Bg = newBg;
+        
+        StateHasChanged();
+    }
+
+    private async Task UpdateBackground()
+    {
+        var newBg = await UIService.GetBackgroundAsBase64Async(ActiveTab.ToString());
+        
+        // Swap layers
+        if (IsLayer1Active)
+        {
+            Layer2Bg = newBg;
+            IsLayer1Active = false;
+        }
+        else
+        {
+            Layer1Bg = newBg;
+            IsLayer1Active = true;
+        }
+        
+        StateHasChanged();
     }
 }

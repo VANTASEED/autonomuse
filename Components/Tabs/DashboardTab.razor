@@ -1,0 +1,354 @@
+@using Autonomuse.ViewModels
+@using Microsoft.AspNetCore.Components.Forms
+@inject DashboardViewModel ViewModel
+
+<div class="tab-content">
+    <div class="header">
+        <h1>Dashboard</h1>
+        <p>Welcome back to Autonomuse</p>
+    </div>
+
+    <div class="dashboard-content">
+        <div class="upload-section glass-card">
+            <h2 class="section-title">Import Media</h2>
+            <p class="section-desc">Select a media type to begin uploading</p>
+
+            @* Step 1: Media Type Selector *@
+            <div class="media-type-selector">
+                <button class="type-btn @(ViewModel.SelectedMediaType == MediaType.Audio ? "active" : "")"
+                        @onclick="() => ViewModel.SelectMediaTypeAsync(MediaType.Audio)">
+                    <span class="type-icon">♪</span>
+                    <span class="type-label">Audio</span>
+                </button>
+                <button class="type-btn @(ViewModel.SelectedMediaType == MediaType.Video ? "active" : "")"
+                        @onclick="() => ViewModel.SelectMediaTypeAsync(MediaType.Video)">
+                    <span class="type-icon">🎞</span>
+                    <span class="type-label">Video</span>
+                </button>
+                @if (ViewModel.IsImageFeatureEnabled)
+                {
+                    <button class="type-btn @(ViewModel.SelectedMediaType == MediaType.Images ? "active" : "")"
+                            @onclick="() => ViewModel.SelectMediaTypeAsync(MediaType.Images)">
+                        <span class="type-icon">🖼</span>
+                        <span class="type-label">Images</span>
+                    </button>
+                }
+                @if (ViewModel.IsEbookFeatureEnabled)
+                {
+                    <button class="type-btn @(ViewModel.SelectedMediaType == MediaType.EBooks ? "active" : "")"
+                            @onclick="() => ViewModel.SelectMediaTypeAsync(MediaType.EBooks)">
+                        <span class="type-icon">🕮</span>
+                        <span class="type-label">Books</span>
+                    </button>
+                }
+            </div>
+
+            @* Step 2: Organization (Playlist / Album / Series) *@
+            @if (ViewModel.ShowOrganization)
+            {
+                <div class="organization-panel">
+                    <div class="panel-header">
+                        <label class="org-label">@ViewModel.OrganizationLabel</label>
+                        @if (ViewModel.ShowPlaylistDropdown)
+                        {
+                            <label class="org-label">Add new @ViewModel.OrganizationLabel.ToLower()</label>
+                        }
+                    </div>
+                    <div class="org-row">
+                        @if (ViewModel.ShowPlaylistDropdown)
+                        {
+                            <div class="custom-dropdown @(_isOrgDropdownOpen ? "open" : "")">
+                                <div class="dropdown-trigger" @onclick="ToggleOrgDropdown">
+                                    <span class="trigger-text">@SelectedOrgName</span>
+                                    <span class="trigger-caret">@(_isOrgDropdownOpen ? "▴" : "▾")</span>
+                                </div>
+                                @if (_isOrgDropdownOpen)
+                                {
+                                    <div class="dropdown-window">
+                                        <div class="dropdown-option @(string.IsNullOrEmpty(ViewModel.SelectedOrganizationGuid) ? "selected" : "")"
+                                             @onclick='() => SelectOrganization("")'>
+                                            No @ViewModel.OrganizationLabel.ToLower()
+                                        </div>
+                                        @foreach (var opt in ViewModel.OrganizationOptions)
+                                        {
+                                            <div class="dropdown-option @(ViewModel.SelectedOrganizationGuid == opt.GUID ? "selected" : "")"
+                                                 @onclick="() => SelectOrganization(opt.GUID)">
+                                                @opt.Name
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="org-create">
+                                <input type="text" class="org-input" placeholder="New @ViewModel.OrganizationLabel.ToLower() name..."
+                                       @bind="ViewModel.NewOrganizationName" />
+                                <button class="org-create-btn" @onclick="ViewModel.CreateNewOrganizationAsync"
+                                        disabled="@string.IsNullOrWhiteSpace(ViewModel.NewOrganizationName)">
+                                    Create
+                                </button>
+                            </div>
+                        }
+                        else if (ViewModel.IsYoutubePlaylistUrl)
+                        {
+                            <div class="youtube-notice-box">
+                                <span class="notice-icon">🔗</span>
+                                <span class="notice-text">You are downloading a YouTube playlist (ID: @(ViewModel.YoutubeUrl.Contains("list=") ? ViewModel.YoutubeUrl.Split("list=")[1].Split("&")[0] : "Playlist"))</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Step 2b: Chapter fields (E-Books only) *@
+                @if (ViewModel.ShowChapterFields)
+                {
+                    <div class="chapter-panel">
+                        <div class="panel-header">
+                            <label class="org-label">Chapter Details</label>
+                            <label class="org-label">Add new chapter</label>
+                        </div>
+                        <div class="chapter-row">
+                            <div class="custom-dropdown @(_isChapterDropdownOpen ? "open" : "")">
+                                <div class="dropdown-trigger" @onclick="ToggleChapterDropdown">
+                                    <span class="trigger-text">@SelectedChapterName</span>
+                                    <span class="trigger-caret">@(_isChapterDropdownOpen ? "▴" : "▾")</span>
+                                </div>
+                                @if (_isChapterDropdownOpen)
+                                {
+                                    <div class="dropdown-window">
+                                        <div class="dropdown-option @(string.IsNullOrEmpty(ViewModel.SelectedChapterGuid) ? "selected" : "")"
+                                             @onclick='() => SelectChapter("")'>
+                                            No chapter
+                                        </div>
+                                        @foreach (var ch in ViewModel.Chapters)
+                                        {
+                                            <div class="dropdown-option @(ViewModel.SelectedChapterGuid == ch.GUID ? "selected" : "")"
+                                                 @onclick="() => SelectChapter(ch.GUID)">
+                                                @ch.Name
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="chapter-create">
+                                <input type="number" class="chapter-input" placeholder="Ch. #" min="1"
+                                       @bind="ViewModel.ChapterNumber" />
+                                <input type="text" class="chapter-title-input" placeholder="New chapter name..."
+                                       @bind="ViewModel.ChapterTitle" />
+                                <button class="org-create-btn" @onclick="ViewModel.CreateNewChapterAsync"
+                                        disabled="@(string.IsNullOrWhiteSpace(ViewModel.ChapterTitle) || string.IsNullOrEmpty(ViewModel.SelectedOrganizationGuid))">
+                                    Create
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+
+            @* Step 3: Dropbox *@
+            @if (ViewModel.ShowDropbox)
+            {
+                <div class="dropbox @(ViewModel.IsUploading ? "uploading" : "")" @onclick="ViewModel.PickFilesNativeAsync">
+                    <InputFile id="fileInput" @key="ViewModel.InputFileKey" OnChange="OnFilesSelected" multiple accept="@ViewModel.AcceptedExtensions" @onclick:preventDefault="true" />
+                    <div class="dropbox-content">
+                        @if (ViewModel.IsUploading)
+                        {
+                            <img src="images/Assets/loading.png" class="dropbox-icon-img spinning" alt="Loading" />
+                            <span class="dropbox-text">Uploading @ViewModel.UploadedCount / @ViewModel.TotalCount...</span>
+                        }
+                        else
+                        {
+                            <span class="dropbox-icon">@ViewModel.DropboxIcon</span>
+                            <span class="dropbox-text">@ViewModel.DropboxLabel</span>
+                        }
+                    </div>
+                </div>
+
+                @if (ViewModel.SelectedMediaType == MediaType.Images)
+                {
+                    <div class="compression-notice-box">
+                        <span class="notice-text">
+                            @(ViewModel.ImageCompressionLevel > 0 
+                                ? $"Images will be compressed at {ViewModel.ImageCompressionLevel}% to save storage • Higher compression saves more space but may reduce image clarity" 
+                                : "Original Quality (No Compression)")
+                        </span>
+                    </div>
+                }
+            }
+            else if (ViewModel.IsYoutubeUrlNotEmpty)
+            {
+                <div class="dropbox-notice-box">
+                    <span class="notice-text">Clear the YouTube URL below to enable manual file upload</span>
+                    <span class="notice-icon">⬇️</span>
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(ViewModel.StatusMessage))
+            {
+                <div class="status-message" @key="ViewModel.StatusId">
+                    <div class="status-left">
+                        @if (ViewModel.StatusMessage.StartsWith("SUCCESS:"))
+                        {
+                            <span class="status-icon icon-success">✔</span>
+                        }
+                        else if (ViewModel.StatusMessage.StartsWith("ERROR:"))
+                        {
+                            <span class="status-icon icon-error">✖</span>
+                        }
+                        else if (ViewModel.StatusMessage.StartsWith("WARN:"))
+                        {
+                            <span class="status-icon icon-warning">⚠</span>
+                        }
+                        <span class="status-text">@GetStatusDisplayMessage(ViewModel.StatusMessage)</span>
+                    </div>
+                </div>
+            }
+
+            @* YouTube Downloader *@
+            @if (ViewModel.ShowYoutubeSection)
+            {
+                <div class="youtube-downloader">
+                    <p class="section-desc">...or download from YouTube</p>
+                    <div class="input-row">
+                        <div class="youtube-input-wrapper">
+                            <input type="text" class="youtube-input" placeholder="Paste YouTube Video or Playlist URL here..."
+                                   @bind="ViewModel.YoutubeUrl" @bind:event="oninput" />
+                            @if (ViewModel.IsYoutubeUrlNotEmpty)
+                            {
+                                <button class="youtube-clear-btn" @onclick="ViewModel.ClearYoutubeUrlAsync" title="Clear URL">×</button>
+                            }
+                        </div>
+                        
+                        @if (ViewModel.SelectedMediaType == MediaType.Audio)
+                        {
+                            <button class="action-btn gold" 
+                                    disabled="@ViewModel.IsYoutubeDownloading"
+                                    @onclick="ViewModel.DownloadYoutubeAudioAsync">@ViewModel.YoutubeDownloadButtonLabel</button>
+                        }
+                        else if (ViewModel.SelectedMediaType == MediaType.Video)
+                        {
+                            <button class="action-btn gold" 
+                                    disabled="@ViewModel.IsYoutubeDownloading"
+                                    @onclick="ViewModel.DownloadYoutubeVideoAsync">@ViewModel.YoutubeDownloadButtonLabel</button>
+                        }
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(ViewModel.YoutubeStatusMessage))
+                    {
+                        <div class="youtube-status-container">
+                            <div class="youtube-status-message @(ViewModel.IsYoutubeDownloading ? "downloading" : "") @(ViewModel.YoutubeStatusMessage.Contains("Cleaned YouTube URL") ? "temporary" : "") @(ViewModel.YoutubeDownloadFailures.Any() ? "expandable" : "")"
+                                 @onclick="ViewModel.ToggleYoutubeStatusExpansion">
+                                <div class="status-left">
+                                    @if (ViewModel.IsYoutubeDownloading)
+                                    {
+                                        <span class="spinner"></span>
+                                    }
+                                    else
+                                    {
+                                        @if (ViewModel.YoutubeStatusMessage.StartsWith("SUCCESS:"))
+                                        {
+                                            <span class="status-icon icon-success">✔</span>
+                                        }
+                                        else if (ViewModel.YoutubeStatusMessage.StartsWith("ERROR:"))
+                                        {
+                                            <span class="status-icon icon-error">✖</span>
+                                        }
+                                        else if (ViewModel.YoutubeStatusMessage.StartsWith("WARN:"))
+                                        {
+                                            <span class="status-icon icon-warning">⚠</span>
+                                        }
+                                    }
+                                    <span class="status-text">@GetStatusDisplayMessage(ViewModel.YoutubeStatusMessage)</span>
+                                </div>
+                                
+                                <div class="status-actions">
+                                    @if (ViewModel.YoutubeDownloadFailures.Any() && !ViewModel.IsYoutubeDownloading)
+                                    {
+                                        <span class="expand-caret">@(ViewModel.IsYoutubeStatusExpanded ? "▲" : "▼")</span>
+                                    }
+                                    @if (!ViewModel.IsYoutubeDownloading)
+                                    {
+                                        <button class="status-close-btn" @onclick="ViewModel.DismissYoutubeStatus" @onclick:stopPropagation="true" title="Dismiss">
+                                            <span>×</span>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                            
+                            @if (ViewModel.IsYoutubeStatusExpanded && ViewModel.YoutubeDownloadFailures.Any())
+                            {
+                                <div class="youtube-status-failures-list glass-card">
+                                    <div class="failures-header">Failed Downloads Details</div>
+                                    @foreach (var failure in ViewModel.YoutubeDownloadFailures)
+                                    {
+                                        <div class="failure-item">
+                                            <div class="failure-title">
+                                                <span class="bullet">▪</span> @failure.Title
+                                            </div>
+                                            <div class="failure-reason">@failure.Error</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _isOrgDropdownOpen;
+    private bool _isChapterDropdownOpen;
+
+    private string SelectedOrgName => string.IsNullOrEmpty(ViewModel.SelectedOrganizationGuid)
+        ? $"No {ViewModel.OrganizationLabel.ToLower()}"
+        : ViewModel.OrganizationOptions.FirstOrDefault(x => x.GUID == ViewModel.SelectedOrganizationGuid)?.Name ?? $"No {ViewModel.OrganizationLabel.ToLower()}";
+
+    private string SelectedChapterName => string.IsNullOrEmpty(ViewModel.SelectedChapterGuid)
+        ? "No chapter"
+        : ViewModel.Chapters.FirstOrDefault(x => x.GUID == ViewModel.SelectedChapterGuid)?.Name ?? "No chapter";
+
+    protected override async Task OnInitializedAsync()
+    {
+        ViewModel.PropertyChanged += (s, e) => InvokeAsync(StateHasChanged);
+        await ViewModel.LoadOrganizationOptionsAsync();
+        await ViewModel.RefreshSettingsAsync();
+    }
+
+    private void ToggleOrgDropdown() => _isOrgDropdownOpen = !_isOrgDropdownOpen;
+    private void ToggleChapterDropdown() => _isChapterDropdownOpen = !_isChapterDropdownOpen;
+
+    private void SelectChapter(string guid)
+    {
+        ViewModel.SelectedChapterGuid = guid;
+        _isChapterDropdownOpen = false;
+    }
+
+    private string GetStatusDisplayMessage(string rawMessage)
+    {
+        if (rawMessage.StartsWith("SUCCESS: ")) return rawMessage.Substring(9);
+        if (rawMessage.StartsWith("SUCCESS:")) return rawMessage.Substring(8);
+        if (rawMessage.StartsWith("ERROR: ")) return rawMessage.Substring(7);
+        if (rawMessage.StartsWith("ERROR:")) return rawMessage.Substring(6);
+        if (rawMessage.StartsWith("WARN: ")) return rawMessage.Substring(6);
+        if (rawMessage.StartsWith("WARN:")) return rawMessage.Substring(5);
+        if (rawMessage.StartsWith("INFO: ")) return rawMessage.Substring(6);
+        if (rawMessage.StartsWith("INFO:")) return rawMessage.Substring(5);
+        if (rawMessage.StartsWith("PROGRESS: ")) return rawMessage.Substring(10);
+        if (rawMessage.StartsWith("PROGRESS:")) return rawMessage.Substring(9);
+        return rawMessage;
+    }
+
+    private void SelectOrganization(string guid)
+    {
+        ViewModel.SelectedOrganizationGuid = guid;
+        _isOrgDropdownOpen = false;
+    }
+
+    private async Task OnFilesSelected(InputFileChangeEventArgs e)
+    {
+        await ViewModel.HandleFileSelectedAsync(e.GetMultipleFiles(50));
+    }
+}

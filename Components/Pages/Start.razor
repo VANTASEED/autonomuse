@@ -5,7 +5,18 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
-        await ViewModel.CheckOnBoardingStatusAsync();
+        await ViewModel.InitializeAsync();
+        
+        // Auto-redirect if everything is already setup
+        if (ViewModel.IsYtDlpReady && ViewModel.IsFpCalcReady && !string.IsNullOrEmpty(ViewModel.LibraryPath))
+        {
+            await ViewModel.CompleteOnBoardingAsync();
+        }
+        else
+        {
+            // Only reveal the checklist if action is actually required
+            ViewModel.IsInitializing = false;
+        }
     }
 }
 
@@ -13,24 +24,86 @@
     <div class="welcome">
         <img src="/images/Assets/Autonomuse2.png" alt="Autonomuse" class="welcomeImage" />
         
-        @if (!string.IsNullOrEmpty(ViewModel.LibraryPath))
+        @if (ViewModel.IsInitializing)
         {
-            <div class="pathDisplay" title="@ViewModel.LibraryPath">
-                <span class="pathLabel">Selected</span>
-                <span class="pathSeparator"></span>
-                <span class="pathValue">@ViewModel.LibraryPath</span>
+            <div class="initializing-box">
+                <div class="loader-pulse"></div>
+                <p>Verifying environment...</p>
             </div>
         }
+        else
+        {
+            <div class="setup-steps">
+                <!-- Step 1: Folder Selection -->
+                <div class="step-item @(!string.IsNullOrEmpty(ViewModel.LibraryPath) ? "completed" : "")">
+                    <div class="step-indicator">1</div>
+                    <div class="step-info">
+                        <span class="step-title">Select Library Gallery</span>
+                        <span class="step-status">@(string.IsNullOrEmpty(ViewModel.LibraryPath) ? "A folder is required to store your media." : ViewModel.LibraryPath)</span>
+                    </div>
+                    <button class="step-action" @onclick="ViewModel.SelectLibraryFolderAsync">
+                        @(string.IsNullOrEmpty(ViewModel.LibraryPath) ? "Browse" : "Change")
+                    </button>
+                </div>
 
-        <div class="buttonContainer">
-            <button class="folderButton" @onclick="ViewModel.SelectLibraryFolderAsync">
-                @((string.IsNullOrEmpty(ViewModel.LibraryPath) ? "Select Library Folder" : "Change Library Folder"))
-            </button>
+                <!-- Step 2: Tool Check (yt-dlp) -->
+                <div class="step-item @(ViewModel.IsYtDlpReady ? "completed" : "")">
+                    <div class="step-indicator">2</div>
+                    <div class="step-info">
+                        <span class="step-title">YouTube Extraction Tool</span>
+                        <span class="step-status">@(ViewModel.IsYtDlpReady ? "yt-dlp is ready." : "Required for downloading from YouTube.")</span>
+                    </div>
+                    
+                    @if (!ViewModel.IsYtDlpReady)
+                    {
+                        <button class="step-action accent" @onclick="ViewModel.InstallYtDlpAsync" disabled="@ViewModel.IsDownloading">
+                            @(ViewModel.IsDownloading ? "Installing..." : "Install")
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="step-action completed" disabled>Installed</button>
+                    }
+                </div>
 
-            @if (!string.IsNullOrEmpty(ViewModel.LibraryPath))
-            {
-                <button class="mutedButton" @onclick="ViewModel.CompleteOnBoardingAsync">Next</button>
-            }
-        </div>
+                <!-- Step 3: Tool Check (fpcalc) -->
+                <div class="step-item @(ViewModel.IsFpCalcReady ? "completed" : "")">
+                    <div class="step-indicator">3</div>
+                    <div class="step-info">
+                        <span class="step-title">Audio Fingerprinter</span>
+                        <span class="step-status">@(ViewModel.IsFpCalcReady ? "fpcalc is ready." : "Required for metadata enrichment.")</span>
+                    </div>
+                    
+                    @if (!ViewModel.IsFpCalcReady)
+                    {
+                        <button class="step-action accent" @onclick="ViewModel.InstallFpCalcAsync" disabled="@ViewModel.IsDownloading">
+                            @(ViewModel.IsDownloading ? "Installing..." : "Install")
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="step-action completed" disabled>Installed</button>
+                    }
+                </div>
+
+                @if (ViewModel.IsDownloading)
+                {
+                    <div class="onboarding-status">
+                        <p class="status-msg">@ViewModel.StatusMessage</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill indeterminate"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="onboarding-footer">
+                <button class="next-button" 
+                        disabled="@(!ViewModel.IsYtDlpReady || !ViewModel.IsFpCalcReady || string.IsNullOrEmpty(ViewModel.LibraryPath) || ViewModel.IsDownloading)"
+                        @onclick="ViewModel.CompleteOnBoardingAsync">
+                    Let's Start
+                </button>
+            </div>
+        }
     </div> 
 </div>

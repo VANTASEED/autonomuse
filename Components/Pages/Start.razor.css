@@ -1,135 +1,244 @@
 .container {
+    height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    background-color: #0f0f0f;
-    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #0d0d0d;
+    font-family: 'Asap Condensed', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 .welcome {
     display: flex;
     flex-direction: column;
     align-items: center;
-    text-align: center;
-    padding: 3.5rem;
-    background: #1e1e1e;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    max-width: 450px;
-    width: 90%;
-    animation: fadeIn 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    background: #151515;
+    padding: 3rem;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    width: 600px;
+    animation: fadeIn 0.6s ease-out;
 }
 
 .welcomeImage {
-    height: 140px;
-    margin-bottom: 1rem;
-    filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.3));
+    width: 280px;
+    margin-bottom: 3rem;
+    filter: drop-shadow(0 0 10px rgba(232, 163, 14, 0.2));
 }
 
-.folderButton {
-    background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
-    color: #000000;
-    border: none;
-    padding: 14px 40px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    transition: all 0.25s ease;
-    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
-}
-
-.folderButton:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
-    filter: brightness(1.1);
-}
-
-.folderButton:active {
-    transform: translateY(1px);
-    box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
-}
-
-.buttonContainer {
+.setup-steps {
+    width: 100%;
     display: flex;
-    gap: 1rem;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 3rem;
 }
 
-.mutedButton {
-    background: rgba(255, 255, 255, 0.05);
-    color: #888888;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 14px 40px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    transition: all 0.25s ease;
-}
-
-.mutedButton:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
-.mutedButton:active {
-    transform: translateY(1px);
-}
-
-.pathDisplay {
-    display: inline-flex;
+.step-item {
+    display: flex;
     align-items: center;
-    margin-top: 1rem;
-    margin-bottom: 1rem;
-    background-color: #121212;
-    color: #ffffff;
-    padding: 8px 18px;
-    border-radius: 50px;
-    font-size: 0.85rem;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    max-width: 90%;
+    gap: 1.2rem;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 1.2rem;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.3s ease;
 }
 
-.pathLabel {
-    color: #aaaaaa;
-    font-weight: 500;
-    margin-right: 12px;
+.step-item.completed {
+    background: rgba(232, 163, 14, 0.05);
+    border-color: rgba(232, 163, 14, 0.3);
 }
 
-.pathSeparator {
-    width: 1px;
-    height: 14px;
-    background-color: rgba(255, 255, 255, 0.2);
-    margin-right: 12px;
+.step-indicator {
+    width: 32px;
+    height: 32px;
+    background: #333;
+    color: #888;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    transition: all 0.3s ease;
 }
 
-.pathValue {
-    font-family: monospace;
-    max-width: 300px;
+.step-item.completed .step-indicator {
+    background: #e8a30e;
+    color: #000;
+}
+
+.step-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 320px;
+}
+
+.step-title {
+    font-weight: 600;
+    color: #eee;
+    font-size: 0.95rem;
+}
+
+.step-status {
+    font-size: 0.75rem;
+    color: #777;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: block;
+}
+
+.step-item.completed .step-status {
+    color: #e8a30e;
+}
+
+.step-action {
+    background: #252525;
+    color: #ccc;
+    border: 1px solid #333;
+    padding: 8px 18px;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.step-action:hover:not(:disabled) {
+    background: #333;
+    border-color: #444;
+    color: #fff;
+}
+
+.step-action.accent {
+    background: #e8a30e;
+    color: #000;
+    border: none;
+}
+
+.step-action.accent:hover:not(:disabled) {
+    background: #ffb82e;
+    transform: translateY(-1px);
+}
+
+.step-action.completed {
+    background: rgba(46, 213, 115, 0.1);
+    color: #2ed573;
+    border: 1px solid rgba(46, 213, 115, 0.2);
+    cursor: default;
+}
+
+.step-check {
+    color: #e8a30e;
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding-right: 5px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #e8a30e;
+    transition: width 0.3s ease;
+}
+
+.progress-fill.indeterminate {
+    width: 30%;
+    animation: indeterminateProgress 1.5s infinite linear;
+}
+
+@keyframes indeterminateProgress {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+}
+
+.onboarding-status {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    width: 100%;
+}
+
+.status-msg {
+    font-size: 0.8rem;
+    color: #e8a30e;
+    text-align: center;
+    margin: 0;
+}
+
+.onboarding-footer {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.next-button {
+    background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
+    color: #000;
+    border: none;
+    padding: 12px 60px;
+    border-radius: 50px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.next-button:hover:not(:disabled) {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+.next-button:disabled {
+    background: #222;
+    color: #555;
+    cursor: not-allowed;
+    transform: none;
 }
 
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95) translateY(10px);
-    }
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
 
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
+.initializing-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2rem 0;
+}
+
+.initializing-box p {
+    color: #888;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin: 0;
+    letter-spacing: 0.5px;
+}
+
+.loader-pulse {
+    width: 48px;
+    height: 48px;
+    background: #e8a30e;
+    border-radius: 50%;
+    animation: loaderPulse 1.5s infinite ease-in-out;
+}
+
+@keyframes loaderPulse {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    70% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(0.8); opacity: 0.5; }
 }

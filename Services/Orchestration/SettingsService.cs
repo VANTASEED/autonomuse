@@ -16,6 +16,11 @@ namespace Autonomuse.Services.Orchestration
             _logger = logger;
         }
 
+        public bool IsDebugMode => _dbService.IsDebugMode;
+        public bool IsImageFeatureEnabled => _dbService.IsImageFeatureEnabled;
+        public bool IsEbookFeatureEnabled => _dbService.IsEbookFeatureEnabled;
+        public async Task InitializeCoreSettingsAsync() => await _dbService.InitializeCoreSettingsAsync();
+
         public async Task<string?> GetSettingAsync(string parameter)
         {
             try
@@ -145,6 +150,23 @@ namespace Autonomuse.Services.Orchestration
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error removing path history");
+            }
+        }
+
+        public async Task SaveToolVersionAsync(string toolName, string version)
+        {
+            string? parameter = toolName.ToLower() switch
+            {
+                "yt-dlp" => "YtDlpVersion",
+                "chromaprint" => "ChromaprintVersion",
+                "fpcalc" => "ChromaprintVersion",
+                "ffmpeg" => "FfmpegVersion",
+                _ => null
+            };
+
+            if (parameter != null)
+            {
+                await SaveSettingAsync(parameter, version);
             }
         }
     }

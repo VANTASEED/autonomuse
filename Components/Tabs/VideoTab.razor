@@ -1,6 +1,1259 @@
+@using Autonomuse.Domain.Entities
+@using Autonomuse.Shared.Contracts
+@using Autonomuse.Shared.Utilities
+@inject IVideoService VideoService
+@inject ISettingsService SettingsService
+@inject IJSRuntime JSRuntime
+
 <div class="tab-content">
     <div class="header">
         <h1>Video Gallery</h1>
         <p>Watch and organize your movie and video clips</p>
     </div>
+
+    <div class="video-content">
+        <!-- Control actions / Bulk operations bar -->
+        <div class="control-cards glass-card">
+            <div class="control-actions">
+                @if (!_isSelectionMode)
+                {
+                    <button class="action-btn" @onclick="ToggleSelectionMode">
+                        Select Videos
+                    </button>
+                }
+                else
+                {
+                    <div class="split-pill">
+                        <button class="split-btn" @onclick="ToggleSelectionMode">Cancel Selection</button>
+                        <div class="divider"></div>
+                        <button class="split-btn" @onclick="SelectAll">Select All</button>
+                    </div>
+                    @if (_showDeleteConfirm)
+                    {
+                        <div class="confirm-group">
+                            <span class="confirm-text">Delete @_selectedGuids.Count items?</span>
+                            <button class="action-btn danger-btn" @onclick="ConfirmDeleteSelectedAsync">Confirm</button>
+                            <button class="action-btn" @onclick="() => _showDeleteConfirm = false">Cancel</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="action-btn danger-btn" @onclick="() => _showDeleteConfirm = true" disabled="@(_selectedGuids.Count == 0)">
+                            Delete Selected (@_selectedGuids.Count)
+                        </button>
+                    }
+                }
+
+                <div class="search-container">
+                    <div class="search-input-wrapper">
+                        <i class="icon-search-mini"></i>
+                        <input type="text" 
+                               @bind="_searchQuery" 
+                               @bind:event="oninput" 
+                               @onkeyup="HandleSearchKeyUp"
+                               placeholder="artist:director_name, genre:sci-fi..." 
+                               class="search-input" />
+                        @if (!string.IsNullOrEmpty(_searchQuery))
+                        {
+                            <button class="clear-search" @onclick="ClearSearch">×</button>
+                        }
+                        <div class="search-tooltip">
+                            <div class="tooltip-header">Search Tags</div>
+                            <div class="tooltip-body">
+                                <p>Filter your gallery using tags separated by commas:</p>
+                                <ul>
+                                    <li><strong>source</strong> filter by source (e.g. <code>youtube</code>, <code>manual</code>)</li>
+                                    <li><strong>artist</strong> filter by creator/artist (e.g. <code>松永依織</code>)</li>
+                                    <li><strong>genre</strong> filter by genre (e.g. <code>Music</code>)</li>
+                                    <li><strong>year</strong> filter by year (e.g. <code>2025</code>)</li>
+                                    <li><strong>title</strong> filter by video title</li>
+                                </ul>
+                                <p class="tooltip-example">Example: <code>artist:松永依織, year:2025</code></p>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="search-btn" @onclick="PerformSearch">Search</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="list-cards glass-card">
+            <!-- Filter Bar -->
+            <div class="filters-bar">
+                <div class="filter-group">
+                    <button class="filter-btn @(_selectedSource == "all" && string.IsNullOrEmpty(_selectedPlaylistId) && _selectedSort == "title" && _isSortAscending ? "active" : "")" @onclick="ClearAllFiltersAsync">All</button>
+
+                    <div class="sort-compound-pill">
+                        <div class="custom-dropdown sort-dropdown compound-left">
+                            <button class="dropdown-trigger @(_isSortDropdownOpen ? "active" : "")" @onclick="ToggleSortDropdown">
+                                <span class="dropdown-selected-text">@GetSortDisplayText()</span>
+                                <span class="dropdown-arrow">▼</span>
+                            </button>
+                            @if (_isSortDropdownOpen)
+                            {
+                                <div class="dropdown-popup glass-card">
+                                    <div class="dropdown-item @(_selectedSort == "title" ? "active" : "")" @onclick='() => SelectSort("title")'>Title</div>
+                                    <div class="dropdown-item @(_selectedSort == "artist" ? "active" : "")" @onclick='() => SelectSort("artist")'>Artist</div>
+                                    <div class="dropdown-item @(_selectedSort == "year" ? "active" : "")" @onclick='() => SelectSort("year")'>Year</div>
+                                    <div class="dropdown-item @(_selectedSort == "added" ? "active" : "")" @onclick='() => SelectSort("added")'>Added</div>
+                                </div>
+                            }
+                        </div>
+
+                        <button class="sort-toggle-btn compound-right" @onclick="ToggleSortDirection">
+                            @(_isSortAscending ? "↑" : "↓")
+                        </button>
+                    </div>
+
+                    <div class="split-pill mini">
+                        <button class="split-btn @(_selectedSource == "manual" ? "active" : "")" @onclick='() => SetSourceFilter("manual")'>Manual</button>
+                        <div class="divider"></div>
+                        <button class="split-btn @(_selectedSource == "youtube" ? "active" : "")" @onclick='() => SetSourceFilter("youtube")'>YouTube</button>
+                    </div>
+
+                    <div class="playlist-filter">
+                        <div class="custom-dropdown">
+                            <button class="dropdown-trigger @(_isPlaylistDropdownOpen ? "active" : "")" @onclick="TogglePlaylistDropdown">
+                                <i class="icon-playlist"></i>
+                                <span class="dropdown-selected-text">@(_selectedPlaylistName ?? "All Videos")</span>
+                                <span class="dropdown-arrow">▼</span>
+                            </button>
+                            @if (_isPlaylistDropdownOpen)
+                            {
+                                <div class="dropdown-popup glass-card">
+                                    <div class="dropdown-item @(string.IsNullOrEmpty(_selectedPlaylistId) ? "active" : "")" 
+                                            @onclick='() => SelectPlaylist(null, "All Videos")'>
+                                        All Videos
+                                    </div>
+                                    <div class="dropdown-item @(_selectedPlaylistId == "any-playlist" ? "active" : "")" 
+                                            @onclick='() => SelectPlaylist("any-playlist", "All Playlists")'>
+                                        All Playlists
+                                    </div>
+                                    <div class="dropdown-item @(_selectedPlaylistId == "none-playlist" ? "active" : "")" 
+                                            @onclick='() => SelectPlaylist("none-playlist", "No Playlists")'>
+                                        No Playlists
+                                    </div>
+                                    <div class="dropdown-divider"></div>
+                                    @foreach (var p in _playlists)
+                                    {
+                                        <div class="dropdown-item @(_selectedPlaylistId == p.GUID ? "active" : "")" 
+                                                @onclick='() => SelectPlaylist(p.GUID, p.Name)'>
+                                            @p.Name
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                        </div>
+                    </div>
+
+                    <div class="status-filter">
+                        <div class="custom-dropdown">
+                            <button class="dropdown-trigger @(_isStatusDropdownOpen ? "active" : "")" @onclick="ToggleStatusDropdown">
+                                <span class="dropdown-selected-text">@GetSelectedStatusDisplay()</span>
+                                <span class="dropdown-arrow">▼</span>
+                            </button>
+                            @if (_isStatusDropdownOpen)
+                            {
+                                <div class="dropdown-popup glass-card">
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "all" ? "active" : "")" @onclick='() => SelectMetadataStatus("all")'>All Status</div>
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "standard" ? "active" : "")" @onclick='() => SelectMetadataStatus("standard")'>Standard</div>
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "modified" ? "active" : "")" @onclick='() => SelectMetadataStatus("modified")'>Modified</div>
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "disabled" ? "active" : "")" @onclick='() => SelectMetadataStatus("disabled")'>Locked</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+            <!-- Video Grid -->
+            @if (_isLoading)
+            {
+                <div class="loading-state">
+                    <p>Loading video gallery...</p>
+                </div>
+            }
+            else if (!FilteredRecords.Any())
+            {
+                <div class="empty-state">
+                    <p>No video records found matching the filters.</p>
+                </div>
+            }
+            else
+            {
+                <div class="video-cards-grid @(_isSelectionMode ? "selection-mode" : "")">
+                    @foreach (var record in FilteredRecords)
+                    {
+                        var thumbUrl = !string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath) 
+                            ? _thumbnails.TryGetValue(record.GUID, out var url) ? url : "images/Assets/empty_thumbnail.png"
+                            : "images/Assets/empty_thumbnail.png";
+                            
+                        var rawTitle = string.IsNullOrEmpty(record.AlternativeTitle) ? record.Title : record.AlternativeTitle;
+                        var displayTitle = FilePathSanitizer.SterilizeTitle(rawTitle, _sterilizationTags);
+                        var displayArtist = string.IsNullOrEmpty(record.Artist) ? "Unknown Creator" : record.Artist;
+                        var displayYear = record.Year?.ToString() ?? "Unknown Year";
+                        var isChecked = _selectedGuids.Contains(record.GUID);
+                        
+                        <div class="video-card @(isChecked ? "selected" : "")" @onclick="() => HandleCardClick(record)">
+                            @if (_isSelectionMode && isChecked)
+                            {
+                                <div class="selection-indicator">
+                                    <i class="icon-check">✓</i>
+                                </div>
+                            }
+                            <div class="video-card-top">
+                                <div class="vhs-tape-wrapper">
+                                    <div class="vhs-tape-inner">
+                                        <img class="vhs-tape-img" src="images/Assets/vhs_tape.png" alt="VHS Tape" />
+                                        <img class="vhs-tape-label" src="@thumbUrl" alt="Tape Label" />
+                                    </div>
+                                </div>
+                                <div class="vhs-sleeve-container">
+                                    <img class="vhs-sleeve-thumb" src="@thumbUrl" alt="@displayTitle" />
+                                </div>
+                            </div>
+                            <div class="video-card-bottom">
+                                <div class="title-action-row">
+                                    <h3 class="video-title" title="@displayTitle">@displayTitle</h3>
+                                    @if (!_isSelectionMode)
+                                    {
+                                        <div class="menu-wrapper" @onclick:stopPropagation>
+                                            <button class="menu-trigger-btn" @onclick="() => ToggleMenu(record.GUID)" title="More options">
+                                                ⋮
+                                            </button>
+                                            @if (_openMenuGuid == record.GUID)
+                                            {
+                                                <div class="context-menu glass-card">
+                                                    @if (!IsRecordLocked(record))
+                                                    {
+                                                        @if (record.MetadataStatus == 1)
+                                                        {
+                                                            <button class="menu-item" @onclick="() => ResetMetadataAsync(record)" title="Reset metadata to original values">
+                                                                <i class="icon-restore"></i> Reset Metadata
+                                                            </button>
+                                                        }
+                                                        <button class="menu-item" @onclick="() => DeleteSingleVideoAsync(record)" title="Delete video record and file">
+                                                            <i class="icon-trash"></i> Delete
+                                                        </button>
+                                                    }
+                                                    <button class="menu-item" @onclick="() => ToggleMetadataDisabledAsync(record)" 
+                                                            title="@(IsRecordLocked(record) ? "Unlock metadata" : "Lock metadata")">
+                                                        <i class="@(IsRecordLocked(record) ? "icon-enable" : "icon-disable")"></i> 
+                                                        @(IsRecordLocked(record) ? "Unlock" : "Lock")
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                <p class="video-artist" title="@displayArtist">@displayArtist</p>
+                                <div class="video-metadata-container">
+                                    <div class="meta-stack">
+                                        <p class="meta-text" title="@record.Genre">Genre <span class="meta-dot">•</span> @(string.IsNullOrEmpty(record.Genre) ? "N/A" : record.Genre)</p>
+                                    </div>
+                                    <div class="video-pills">
+                                        <span class="pill year-pill">@displayYear</span>
+                                        <span class="pill source-pill @(record.Source == "youtube" ? "youtube" : "manual")">
+                                            @(record.Source == "youtube" ? "YouTube" : "Manual")
+                                        </span>
+                                        <span class="pill status-pill @GetMetadataStatusClass(record.MetadataStatus)"
+                                              title="@GetMetadataStatusTitle(record.MetadataStatus)">
+                                            @GetMetadataStatusText(record.MetadataStatus)
+                                        </span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(record.Resolution) || record.Duration.HasValue)
+                                    {
+                                        <div class="quality-row">
+                                            <span class="pill res-pill">
+                                                @if (!string.IsNullOrEmpty(record.Resolution))
+                                                {
+                                                    @record.Resolution
+                                                    @(" • ")
+                                                }
+                                                @if (record.Duration.HasValue && record.Duration.Value > 0)
+                                                {
+                                                    @(TimeSpan.FromSeconds(record.Duration.Value).ToString(@"hh\:mm\:ss"))
+                                                }
+                                                else
+                                                {
+                                                    @("NO LENGTH DATA")
+                                                }
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Premium Delete Confirmation Modal -->
+    @if (_deleteConfirmRecord != null)
+    {
+        <div class="modal-backdrop" @onclick="CancelSingleDelete">
+            <div class="modal-card glass-card" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Confirm Deletion</h3>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="warning-icon-wrapper">
+                        <i class="icon-warning-large">⚠️</i>
+                    </div>
+                    <p class="warning-title">Delete Video permanently?</p>
+                    <p class="warning-desc">
+                        This will permanently delete the database record, physical video file, cover art, and any backups.
+                    </p>
+                    <div class="target-card-preview glass-card">
+                        <div class="preview-title">@_deleteConfirmRecord.Title</div>
+                        <div class="preview-meta">@(_deleteConfirmRecord.Artist ?? "Unknown Creator")</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="action-btn select-audio" @onclick="CancelSingleDelete">Cancel</button>
+                    <button class="action-btn danger-btn" @onclick="ConfirmSingleDeleteAsync">Yes, Delete</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Metadata Details & Edit Modal -->
+    @if (_editMetadataRecord != null)
+    {
+        <div class="modal-backdrop" @onclick="CloseMetadataEdit">
+            <div class="modal-card metadata-modal glass-card" @onclick:stopPropagation>
+                <div class="modal-header">
+                    <h3>Metadata Details</h3>
+                </div>
+                <div class="modal-body modal-columns">
+                    <div class="column-left">
+                        <div class="vhs-preview-card">
+                            <div class="vhs-tape-wrapper-modal">
+                                <div class="vhs-tape-inner-modal">
+                                    <img class="vhs-tape-img" src="images/Assets/vhs_tape.png" alt="VHS Tape" />
+                                    <img class="vhs-tape-label" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _editCoverArtBase64)" alt="Tape Label" />
+                                </div>
+                            </div>
+                            <div class="vhs-sleeve-container-modal">
+                                <img class="vhs-sleeve-thumb" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _editCoverArtBase64)" alt="Tape Sleeve" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column-right">
+                        <!-- Editable Fields Grid -->
+                        <div class="editable-grid">
+                            <!-- Title -->
+                            <div class="tech-item full-width editable-meta-item">
+                                <span class="tech-label">Title</span>
+                                <div class="editable-val-container">
+                                    @if (_editingTitleMode)
+                                    {
+                                        <input type="text" class="form-input inline-edit" @bind="_editTitle" @onblur="() => _editingTitleMode = false" @onkeydown="OnTitleKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => _editingTitleMode = true">@(string.IsNullOrEmpty(_editTitle) ? "N/A" : _editTitle)</span>
+                                        <button class="pencil-btn" @onclick="() => _editingTitleMode = true">✎</button>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Artist (Director) -->
+                            <div class="tech-item editable-meta-item">
+                                <span class="tech-label">Artist / Creator</span>
+                                <div class="editable-val-container">
+                                    @if (_editingArtistMode)
+                                    {
+                                        <input type="text" class="form-input inline-edit" @bind="_editArtist" @onblur="() => _editingArtistMode = false" @onkeydown="OnArtistKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => _editingArtistMode = true">@(string.IsNullOrEmpty(_editArtist) ? "N/A" : _editArtist)</span>
+                                        <button class="pencil-btn" @onclick="() => _editingArtistMode = true">✎</button>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Genre -->
+                            <div class="tech-item editable-meta-item">
+                                <span class="tech-label">Genre</span>
+                                <div class="editable-val-container">
+                                    @if (_editingGenreMode)
+                                    {
+                                        <input type="text" class="form-input inline-edit" @bind="_editGenre" @onblur="() => _editingGenreMode = false" @onkeydown="OnGenreKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => _editingGenreMode = true">@(string.IsNullOrEmpty(_editGenre) ? "N/A" : _editGenre)</span>
+                                        <button class="pencil-btn" @onclick="() => _editingGenreMode = true">✎</button>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Year -->
+                            <div class="tech-item editable-meta-item">
+                                <span class="tech-label">Year</span>
+                                <div class="editable-val-container">
+                                    @if (_editingYearMode)
+                                    {
+                                        <input type="number" class="form-input inline-edit" @bind="_editYear" min="1000" max="3000" @onblur="() => _editingYearMode = false" @onkeydown="OnYearKeyDown" autofocus />
+                                    }
+                                    else
+                                    {
+                                        <span class="tech-val" @onclick="() => _editingYearMode = true">@(_editYear.HasValue ? _editYear.Value.ToString() : "N/A")</span>
+                                        <button class="pencil-btn" @onclick="() => _editingYearMode = true">✎</button>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Cover Art / Thumbnail Upload -->
+                            <div class="tech-item full-width editable-meta-item">
+                                <span class="tech-label">Thumbnail Image</span>
+                                <div class="file-upload-wrapper inline-upload" @onclick="PickCoverArtNativeAsync">
+                                    <span class="file-upload-btn">Choose Image</span>
+                                    <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Technical Read-only Fields Grid -->
+                        <div class="technical-metadata-section">
+                            <div class="tech-grid-4">
+                                <div class="tech-item">
+                                    <span class="tech-label">Source</span>
+                                    <span class="tech-val">@_editMetadataRecord.Source</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">YouTube ID</span>
+                                    <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.YoutubeID) ? "N/A" : _editMetadataRecord.YoutubeID)</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Format</span>
+                                    <span class="tech-val">@_editMetadataRecord.Extension.ToUpper().TrimStart('.')</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">File Size</span>
+                                    <span class="tech-val">@FormatFileSize(_editMetadataRecord.FileSize)</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Duration</span>
+                                    <span class="tech-val">@FormatDuration(_editMetadataRecord.Duration)</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Resolution</span>
+                                    <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.Resolution) ? "N/A" : _editMetadataRecord.Resolution)</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Audio Bitrate</span>
+                                    <span class="tech-val">@(_editMetadataRecord.Bitrate.HasValue ? $"{_editMetadataRecord.Bitrate} kbps" : "N/A")</span>
+                                </div>
+                                <div class="tech-item">
+                                    <span class="tech-label">Audio Channels</span>
+                                    <span class="tech-val">@(_editMetadataRecord.Channels.HasValue ? (_editMetadataRecord.Channels == 2 ? "Stereo" : "Mono") : "N/A")</span>
+                                </div>
+                                <div class="tech-item span-4">
+                                    <span class="tech-label">File Path</span>
+                                    <span class="tech-val" title="@_editMetadataRecord.FilePath">@_editMetadataRecord.FilePath</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="action-btn select-audio" @onclick="CloseMetadataEdit" disabled="@_isSavingMetadata">Cancel</button>
+                    <button class="action-btn" @onclick="SaveMetadataChangesAsync" disabled="@_isSavingMetadata">
+                        @if (_isSavingMetadata)
+                        {
+                            <span class="btn-spinner mini"></span> @(" Saving...")
+                        }
+                        else
+                        {
+                            @("Save Changes")
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private List<VideoRecord> _videoRecords = new();
+    private List<VideoRecord> _filteredRecords = new();
+    private Dictionary<string, string> _thumbnails = new();
+    private List<string> _sterilizationTags = new();
+    private bool _isLoading = true;
+
+    // Filters state
+    private string _searchQuery = "";
+    private string _selectedSource = "all";
+    private string? _selectedPlaylistId = null;
+    private string? _selectedPlaylistName = null;
+    private string _selectedSort = "title";
+    private string _selectedMetadataStatus = "all";
+    private bool _isSortAscending = true;
+
+    // Dropdown toggles
+    private bool _isSortDropdownOpen = false;
+    private bool _isPlaylistDropdownOpen = false;
+    private bool _isStatusDropdownOpen = false;
+
+    // Playlists list
+    private List<VideoPlaylist> _playlists = new();
+    private List<VideoRecord> _playlistItems = new();
+    private HashSet<string> _guidsInAnyPlaylist = new();
+
+    // Selection mode state
+    private bool _isSelectionMode = false;
+    private HashSet<string> _selectedGuids = new();
+    private bool _showDeleteConfirm = false;
+
+    // Context menu state
+    private string? _openMenuGuid = null;
+
+    // Single delete confirm state
+    private VideoRecord? _deleteConfirmRecord = null;
+
+    // Metadata Details popup state
+    private VideoRecord? _editMetadataRecord = null;
+    private string _editTitle = "";
+    private string _editArtist = "";
+    private string _editGenre = "";
+    private int? _editYear = null;
+    private string? _editCoverArtPath = null;
+    private string? _editCoverArtBase64 = null;
+    
+    // Inline edit triggers
+    private bool _editingTitleMode = false;
+    private bool _editingArtistMode = false;
+    private bool _editingGenreMode = false;
+    private bool _editingYearMode = false;
+
+    // Native file picking inside modal
+    private bool _hasNewCoverArtUploaded = false;
+    private byte[]? _uploadedCoverArtBytes = null;
+    private string _uploadedCoverArtFileName = "";
+    private bool _isSavingMetadata = false;
+
+    private List<VideoRecord> FilteredRecords => _filteredRecords;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVideoRecordsAsync();
+        _playlists = await VideoService.GetPlaylistsAsync();
+        _guidsInAnyPlaylist = await VideoService.GetVideoGuidsInAnyPlaylistAsync();
+    }
+
+    private void TogglePlaylistDropdown()
+    {
+        _isPlaylistDropdownOpen = !_isPlaylistDropdownOpen;
+    }
+
+    private async Task SelectPlaylist(string? guid, string name)
+    {
+        _selectedPlaylistId = guid;
+        _selectedPlaylistName = name;
+        _isPlaylistDropdownOpen = false;
+        
+        if (!string.IsNullOrEmpty(_selectedPlaylistId) && _selectedPlaylistId != "any-playlist" && _selectedPlaylistId != "none-playlist")
+        {
+            _playlistItems = await VideoService.GetVideoInPlaylistAsync(_selectedPlaylistId);
+        }
+        else
+        {
+            _playlistItems.Clear();
+            _guidsInAnyPlaylist = await VideoService.GetVideoGuidsInAnyPlaylistAsync();
+        }
+        await ApplyFiltersAsync();
+    }
+
+    private async Task SetSourceFilter(string source)
+    {
+        if (_selectedSource == source)
+        {
+            _selectedSource = "all";
+        }
+        else
+        {
+            _selectedSource = source;
+        }
+        await ApplyFiltersAsync();
+    }
+
+    private void ToggleSortDropdown()
+    {
+        _isSortDropdownOpen = !_isSortDropdownOpen;
+    }
+
+    private async Task SelectSort(string sort)
+    {
+        _selectedSort = sort;
+        _isSortDropdownOpen = false;
+        await ApplyFiltersAsync();
+    }
+
+    private string GetSortDisplayText()
+    {
+        return _selectedSort switch
+        {
+            "title" => "Title",
+            "artist" => "Artist",
+            "year" => "Year",
+            "added" => "Added",
+            _ => "Title"
+        };
+    }
+
+    private async Task ToggleSortDirection()
+    {
+        _isSortAscending = !_isSortAscending;
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ClearAllFiltersAsync()
+    {
+        _searchQuery = "";
+        _selectedSource = "all";
+        _selectedPlaylistId = null;
+        _selectedPlaylistName = null;
+        _selectedSort = "title";
+        _selectedMetadataStatus = "all";
+        _isSortAscending = true;
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        var results = _videoRecords.AsEnumerable();
+
+        // 1. Source Filter
+        if (_selectedSource == "manual") results = results.Where(r => r.Source != "youtube");
+        else if (_selectedSource == "youtube") results = results.Where(r => r.Source == "youtube");
+
+        // 2. Playlist Filter
+        if (!string.IsNullOrEmpty(_selectedPlaylistId))
+        {
+            if (_selectedPlaylistId == "any-playlist")
+            {
+                results = results.Where(r => _guidsInAnyPlaylist.Contains(r.GUID));
+            }
+            else if (_selectedPlaylistId == "none-playlist")
+            {
+                results = results.Where(r => !_guidsInAnyPlaylist.Contains(r.GUID));
+            }
+            else
+            {
+                var guidsInPlaylist = _playlistItems.Select(p => p.GUID).ToHashSet();
+                results = results.Where(r => guidsInPlaylist.Contains(r.GUID));
+            }
+        }
+
+        // 3. Search Query
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            var segments = _searchQuery.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var segment in segments)
+            {
+                var parts = segment.Split(':', 2);
+                if (parts.Length < 2) continue;
+
+                var tag = parts[0].Trim().ToLower();
+                var value = parts[1].Trim().ToLower().Replace("_", " ");
+
+                results = tag switch
+                {
+                    "source" => results.Where(r => r.Source.ToLower().Contains(value)),
+                    "artist" => results.Where(r => (r.Artist ?? "").ToLower().Contains(value)),
+                    "genre" => results.Where(r => (r.Genre ?? "").ToLower().Contains(value)),
+                    "year" => results.Where(r => r.Year?.ToString() == value),
+                    "title" => results.Where(r => r.Title.ToLower().Contains(value) || (r.AlternativeTitle ?? "").ToLower().Contains(value)),
+                    _ => results
+                };
+            }
+        }
+
+        // 4. Metadata Status Filter
+        if (_selectedMetadataStatus == "standard") results = results.Where(r => r.MetadataStatus == 0);
+        else if (_selectedMetadataStatus == "modified") results = results.Where(r => r.MetadataStatus == 1);
+        else if (_selectedMetadataStatus == "disabled") results = results.Where(r => r.MetadataStatus >= 10);
+
+        // 5. Sorting
+        results = _selectedSort switch
+        {
+            "title" => _isSortAscending 
+                ? results.OrderBy(r => GetSortGroup(GetSortTitle(r))).ThenBy(r => GetSortTitle(r))
+                : results.OrderByDescending(r => GetSortGroup(GetSortTitle(r))).ThenByDescending(r => GetSortTitle(r)),
+            "artist" => _isSortAscending 
+                ? results.OrderBy(r => string.IsNullOrEmpty(r.Artist) ? "zzz" : r.Artist)
+                : results.OrderByDescending(r => string.IsNullOrEmpty(r.Artist) ? "zzz" : r.Artist),
+            "year" => _isSortAscending 
+                ? results.OrderBy(r => r.Year ?? 9999)
+                : results.OrderByDescending(r => r.Year ?? 0),
+            "added" => _isSortAscending 
+                ? results.OrderBy(r => r.CreatedAt)
+                : results.OrderByDescending(r => r.CreatedAt),
+            _ => results
+        };
+
+        _filteredRecords = results.ToList();
+        StateHasChanged();
+    }
+
+    private string GetSortTitle(VideoRecord r) => string.IsNullOrEmpty(r.AlternativeTitle) ? r.Title : r.AlternativeTitle;
+
+    private int GetSortGroup(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return 1;
+        var firstChar = text.TrimStart().FirstOrDefault();
+        return char.IsLetter(firstChar) ? 0 : 1;
+    }
+
+    private async Task PerformSearch()
+    {
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchQuery = "";
+        await ApplyFiltersAsync();
+    }
+
+    private async Task HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await PerformSearch();
+        }
+    }
+
+    // Selection mode operations
+    private void ToggleSelectionMode()
+    {
+        _isSelectionMode = !_isSelectionMode;
+        _selectedGuids.Clear();
+        _showDeleteConfirm = false;
+        _openMenuGuid = null;
+    }
+
+    private void SelectAll()
+    {
+        if (_selectedGuids.Count == FilteredRecords.Count(r => !IsRecordLocked(r)))
+        {
+            _selectedGuids.Clear();
+        }
+        else
+        {
+            _selectedGuids = FilteredRecords.Where(r => !IsRecordLocked(r)).Select(r => r.GUID).ToHashSet();
+        }
+    }
+
+    private void ToggleSelection(string guid)
+    {
+        if (_selectedGuids.Contains(guid))
+        {
+            _selectedGuids.Remove(guid);
+        }
+        else
+        {
+            var record = _videoRecords.FirstOrDefault(r => r.GUID == guid);
+            if (record != null && IsRecordLocked(record)) return;
+            _selectedGuids.Add(guid);
+        }
+    }
+
+    private void HandleCardClick(VideoRecord record)
+    {
+        if (_isSelectionMode)
+        {
+            ToggleSelection(record.GUID);
+        }
+        else
+        {
+            OpenMetadataEdit(record);
+        }
+    }
+
+    private async Task ConfirmDeleteSelectedAsync()
+    {
+        _isLoading = true;
+        _showDeleteConfirm = false;
+        StateHasChanged();
+
+        try
+        {
+                var guidsToDelete = _selectedGuids.ToList();
+                // Safety: exclude any locked records
+                var nonLocked = _videoRecords.Where(r => guidsToDelete.Contains(r.GUID) && !IsRecordLocked(r)).Select(r => r.GUID).ToList();
+                foreach (var guid in nonLocked)
+            {
+                await VideoService.DeleteVideoAsync(guid);
+            }
+            _selectedGuids.Clear();
+            _isSelectionMode = false;
+            await LoadVideoRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to delete selected items: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // Context Menu operations
+    private void ToggleMenu(string guid)
+    {
+        if (_openMenuGuid == guid)
+        {
+            _openMenuGuid = null;
+        }
+        else
+        {
+            _openMenuGuid = guid;
+        }
+    }
+
+    // Delete Single operations
+    private void DeleteSingleVideoAsync(VideoRecord record)
+    {
+        _openMenuGuid = null;
+        _deleteConfirmRecord = record;
+    }
+
+    private void CancelSingleDelete()
+    {
+        _deleteConfirmRecord = null;
+    }
+
+    private async Task ConfirmSingleDeleteAsync()
+    {
+        if (_deleteConfirmRecord == null) return;
+
+        _isLoading = true;
+        var guid = _deleteConfirmRecord.GUID;
+        _deleteConfirmRecord = null;
+        StateHasChanged();
+
+        try
+        {
+            await VideoService.DeleteVideoAsync(guid);
+            await LoadVideoRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to delete video: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    // Modal view & edit operations
+    private void OpenMetadataEdit(VideoRecord record)
+    {
+        _openMenuGuid = null;
+        _editMetadataRecord = record;
+        _editTitle = record.Title;
+        _editArtist = record.Artist ?? "";
+        _editGenre = record.Genre ?? "";
+        _editYear = record.Year;
+        _editCoverArtPath = record.ThumbnailPath;
+        
+        _editingTitleMode = false;
+        _editingArtistMode = false;
+        _editingGenreMode = false;
+        _editingYearMode = false;
+
+        _hasNewCoverArtUploaded = false;
+        _uploadedCoverArtBytes = null;
+        _uploadedCoverArtFileName = "";
+
+        if (!string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath))
+        {
+            _editCoverArtBase64 = _thumbnails.TryGetValue(record.GUID, out var url) ? url : null;
+        }
+        else
+        {
+            _editCoverArtBase64 = null;
+        }
+    }
+
+    private void CloseMetadataEdit()
+    {
+        _editMetadataRecord = null;
+    }
+
+    private async Task PickCoverArtNativeAsync()
+    {
+        try
+        {
+            var options = new PickOptions
+            {
+                PickerTitle = "Please select a custom video thumbnail image",
+                FileTypes = FilePickerFileType.Images
+            };
+
+            var result = await FilePicker.Default.PickAsync(options);
+            if (result != null)
+            {
+                _uploadedCoverArtFileName = result.FileName;
+                
+                using var stream = await result.OpenReadAsync();
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                _uploadedCoverArtBytes = ms.ToArray();
+                _hasNewCoverArtUploaded = true;
+
+                var ext = Path.GetExtension(result.FileName).ToLowerInvariant();
+                var mimeType = ext switch
+                {
+                    ".png" => "image/png",
+                    ".webp" => "image/webp",
+                    _ => "image/jpeg"
+                };
+                _editCoverArtBase64 = $"data:{mimeType};base64,{Convert.ToBase64String(_uploadedCoverArtBytes)}";
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to pick native file: {ex.Message}");
+        }
+    }
+
+    private async Task SaveMetadataChangesAsync()
+    {
+        if (_editMetadataRecord == null || _isSavingMetadata) return;
+
+        _isSavingMetadata = true;
+        StateHasChanged();
+
+        try
+        {
+            var record = _editMetadataRecord;
+
+            // Create backup before first modification
+            if (record.MetadataStatus == 0)
+            {
+                await EnsureVideoBackupCreatedAsync(record);
+            }
+
+            record.Title = _editTitle;
+            record.AlternativeTitle = _editTitle;
+            record.Artist = _editArtist;
+            record.Genre = _editGenre;
+            record.Year = _editYear;
+            record.MetadataStatus = 1;
+
+            if (_hasNewCoverArtUploaded && _uploadedCoverArtBytes != null)
+            {
+                using var ms = new MemoryStream(_uploadedCoverArtBytes);
+                var savedPath = await VideoService.SaveThumbnailAsync(record.GUID, ms);
+                record.ThumbnailPath = savedPath;
+            }
+
+            await VideoService.UpdateVideoRecordAsync(record);
+            await VideoService.UpdatePhysicalTagsAsync(record);
+
+            _editMetadataRecord = null;
+            await LoadVideoRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to save video metadata: {ex.Message}");
+        }
+        finally
+        {
+            _isSavingMetadata = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnTitleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _editingTitleMode = false;
+        }
+    }
+
+    private async Task OnArtistKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _editingArtistMode = false;
+        }
+    }
+
+
+
+    private async Task OnGenreKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _editingGenreMode = false;
+        }
+    }
+
+    private async Task OnYearKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _editingYearMode = false;
+        }
+    }
+
+    private async Task LoadVideoRecordsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            // Load sterilization tags
+            var sterilizationStr = await SettingsService.GetSettingAsync("StringSterilization");
+            if (!string.IsNullOrEmpty(sterilizationStr))
+            {
+                _sterilizationTags = sterilizationStr.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+            }
+
+            _videoRecords = await VideoService.GetAllVideosAsync();
+            
+            _thumbnails.Clear();
+            foreach(var record in _videoRecords)
+            {
+                if (!string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath))
+                {
+                    try
+                    {
+                        var bytes = await System.IO.File.ReadAllBytesAsync(record.ThumbnailPath);
+                        _thumbnails[record.GUID] = $"data:image/jpeg;base64,{Convert.ToBase64String(bytes)}";
+                    }
+                    catch
+                    {
+                        _thumbnails[record.GUID] = "images/Assets/empty_thumbnail.png";
+                    }
+                }
+            }
+            await ApplyFiltersAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading video: {ex.Message}");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private bool IsRecordLocked(VideoRecord record)
+    {
+        if (record == null) return false;
+        return record.MetadataStatus >= 10;
+    }
+
+    private string GetMetadataStatusClass(int status)
+    {
+        if (status >= 10) return "disabled";
+        return status switch
+        {
+            0 => "standard",
+            1 => "modified",
+            _ => "standard"
+        };
+    }
+
+    private string GetMetadataStatusTitle(int status)
+    {
+        if (status >= 10) return "Locked";
+        return status switch
+        {
+            0 => "Standard",
+            1 => "Modified",
+            _ => "Standard"
+        };
+    }
+
+    private string GetMetadataStatusText(int status)
+    {
+        if (status >= 10) return "Locked";
+        return status switch
+        {
+            0 => "Standard",
+            1 => "Modified",
+            _ => "Standard"
+        };
+    }
+
+    private string GetSelectedStatusDisplay()
+    {
+        return _selectedMetadataStatus switch
+        {
+            "all" => "All Status",
+            "standard" => "Standard",
+            "modified" => "Modified",
+            "disabled" => "Locked",
+            _ => "All Status"
+        };
+    }
+
+    private void ToggleStatusDropdown()
+    {
+        _isStatusDropdownOpen = !_isStatusDropdownOpen;
+    }
+
+    private async Task SelectMetadataStatus(string status)
+    {
+        _selectedMetadataStatus = status;
+        _isStatusDropdownOpen = false;
+        await ApplyFiltersAsync();
+    }
+
+    private async Task ToggleMetadataDisabledAsync(VideoRecord record)
+    {
+        _openMenuGuid = null;
+        if (IsRecordLocked(record))
+        {
+            record.MetadataStatus = record.MetadataStatus >= 10 ? record.MetadataStatus - 10 : 0;
+        }
+        else
+        {
+            record.MetadataStatus = 10 + record.MetadataStatus;
+        }
+        await VideoService.UpdateVideoRecordAsync(record);
+        await LoadVideoRecordsAsync();
+    }
+
+    private async Task ResetMetadataAsync(VideoRecord record)
+    {
+        _openMenuGuid = null;
+        try
+        {
+            var backup = await VideoService.GetVideoBackupAsync(record.GUID);
+            if (backup == null)
+            {
+                System.Diagnostics.Debug.WriteLine("No backup found for this video.");
+                return;
+            }
+
+            var libraryPath = await SettingsService.GetSettingAsync("LibraryPath");
+
+            // Restore thumbnail
+            if (!string.IsNullOrEmpty(libraryPath))
+            {
+                var standardThumbPath = Path.Combine(libraryPath, "Art", "Video", $"{record.GUID}.jpg");
+                var backupFolder = Path.Combine(libraryPath, "Art", "VideoBackup");
+                var backupThumbPath = Path.Combine(backupFolder, $"{record.GUID}.jpg");
+
+                if (string.IsNullOrEmpty(backup.ThumbnailPath))
+                {
+                    if (System.IO.File.Exists(standardThumbPath)) System.IO.File.Delete(standardThumbPath);
+                    record.ThumbnailPath = null;
+                }
+                else
+                {
+                    if (System.IO.File.Exists(backupThumbPath))
+                    {
+                        var destDir = Path.GetDirectoryName(standardThumbPath);
+                        if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
+                            Directory.CreateDirectory(destDir);
+
+                        System.IO.File.Copy(backupThumbPath, standardThumbPath, true);
+                        System.IO.File.Delete(backupThumbPath);
+                        record.ThumbnailPath = standardThumbPath;
+                    }
+                }
+            }
+
+            record.AlternativeTitle = backup.AlternativeTitle;
+            record.Title = backup.AlternativeTitle ?? record.FileName;
+            record.Artist = backup.Artist;
+            record.Genre = backup.Genre;
+            record.Year = backup.Year;
+            record.MetadataStatus = 0;
+
+            await VideoService.UpdateVideoRecordAsync(record);
+            await VideoService.UpdatePhysicalTagsAsync(record);
+            await VideoService.DeleteVideoBackupAsync(record.GUID);
+            await LoadVideoRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to reset metadata: {ex.Message}");
+        }
+    }
+
+    private async Task EnsureVideoBackupCreatedAsync(VideoRecord record)
+    {
+        try
+        {
+            var existing = await VideoService.GetVideoBackupAsync(record.GUID);
+            if (existing != null) return;
+
+            var backup = new VideoBackup
+            {
+                GUID = record.GUID,
+                AlternativeTitle = record.AlternativeTitle,
+                Artist = record.Artist,
+                Genre = record.Genre,
+                Year = record.Year,
+                ThumbnailPath = record.ThumbnailPath,
+                CreatedAt = DateTime.UtcNow
+            };
+            await VideoService.CreateVideoBackupAsync(backup);
+
+            // Backup thumbnail file if it exists
+            if (!string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath))
+            {
+                try
+                {
+                    var libraryPath = await SettingsService.GetSettingAsync("LibraryPath");
+                    if (!string.IsNullOrEmpty(libraryPath))
+                    {
+                        var backupFolder = Path.Combine(libraryPath, "Art", "VideoBackup");
+                        if (!Directory.Exists(backupFolder)) Directory.CreateDirectory(backupFolder);
+
+                        var backupPath = Path.Combine(backupFolder, $"{record.GUID}.jpg");
+                        if (!System.IO.File.Exists(backupPath))
+                        {
+                            System.IO.File.Copy(record.ThumbnailPath, backupPath);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to backup thumbnail: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"EnsureVideoBackupCreatedAsync failed: {ex.Message}");
+        }
+    }
+
+    private string FormatFileSize(long? bytes)
+    {
+        if (!bytes.HasValue) return "N/A";
+        string[] suffixes = { "B", "KB", "MB", "GB" };
+        double len = bytes.Value;
+        int order = 0;
+        while (len >= 1024 && order < suffixes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+        return $"{len:0.##} {suffixes[order]}";
+    }
+
+    private string FormatDuration(double? seconds)
+    {
+        if (!seconds.HasValue || seconds.Value <= 0) return "N/A";
+        return TimeSpan.FromSeconds(seconds.Value).ToString(@"hh\:mm\:ss");
+    }
+}

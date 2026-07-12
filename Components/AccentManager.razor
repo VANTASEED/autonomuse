@@ -1,0 +1,68 @@
+@using Autonomuse.Services.Orchestration
+@using Autonomuse.Shared.Contracts
+@inject ISettingsService SettingsService
+@inject ColorThemeService ColorService
+@implements IDisposable
+
+<style>
+    :root {
+        --accent-base: @(_currentTheme?.Base ?? "#e8a30e");
+        --accent-bright: @(_currentTheme?.Bright ?? "#d4af37");
+        --accent-dark: @(_currentTheme?.Dark ?? "#b8860b");
+        --accent-hover: @(_currentTheme?.Hover ?? "#ffb82e");
+        --accent-glow: @(_currentTheme?.Glow ?? "rgba(232, 163, 14, 0.15)");
+        --accent-subtle: @(_currentTheme?.Subtle ?? "rgba(232, 163, 14, 0.05)");
+        --accent-text: @(_currentTheme?.ContrastText ?? "#000000");
+        --accent-rgb: @(ColorThemeService.HexToRgb(_currentTheme?.Base ?? "#e8a30e"));
+    }
+</style>
+
+@code {
+    private ColorThemeService.AccentTheme? _currentTheme;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadThemeAsync();
+    }
+
+    private async Task LoadThemeAsync()
+    {
+        var json = await SettingsService.GetSettingAsync("UserAccents");
+        if (!string.IsNullOrEmpty(json))
+        {
+            _currentTheme = ColorService.DeserializeTheme(json);
+        }
+        else
+        {
+            _currentTheme = null;
+        }
+    }
+
+    // We can use a simple event pattern if we want real-time updates without page refresh,
+    // but for now, we'll implement a way for Settings to trigger a refresh.
+    public static event Action? ThemeChanged;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            ThemeChanged += Refresh;
+        }
+    }
+
+    private void Refresh()
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadThemeAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        ThemeChanged -= Refresh;
+    }
+
+    public static void NotifyThemeChanged() => ThemeChanged?.Invoke();
+}
