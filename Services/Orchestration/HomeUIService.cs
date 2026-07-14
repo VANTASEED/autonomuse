@@ -19,7 +19,7 @@ namespace Autonomuse.Services.Orchestration
             _settingsService = settingsService;
             
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            _backgroundFolder = Path.Combine(localAppData, "Autonomuse", "com.reversedhorizonstudio.autonomuse", "Data", "UI Background");
+            _backgroundFolder = Path.Combine(localAppData, "Autonomuse", "com.vantaseed.autonomuse", "Data", "UI Background");
             _thumbnailFolder = Path.Combine(_backgroundFolder, "thumbnail");
             
             Initialize();

@@ -24,7 +24,6 @@ namespace Autonomuse.ViewModels
         private string _currentAccentColor = "#e8a30e";
         private bool _isAccentTextWhite = false;
         private ObservableCollection<PathHistoryItem> _pathHistory = new();
-        private int _imageCompressionLevel = 0;
         private HomeUISettings _uiSettings = new();
         private Dictionary<string, string> _tabThumbnails = new();
         private string _sterilizationInput = string.Empty;
@@ -73,20 +72,6 @@ namespace Autonomuse.ViewModels
             set { _uiSettings = value; OnPropertyChanged(); }
         }
 
-        public int ImageCompressionLevel
-        {
-            get => _imageCompressionLevel;
-            set 
-            { 
-                if (_imageCompressionLevel != value)
-                {
-                    _imageCompressionLevel = value; 
-                    OnPropertyChanged(); 
-                    _ = _settingsService.SaveSettingAsync("ImageCompressionLevel", value.ToString());
-                }
-            }
-        }
-
         public Dictionary<string, string> TabThumbnails
         {
             get => _tabThumbnails;
@@ -118,9 +103,6 @@ namespace Autonomuse.ViewModels
                 }
             }
         }
-
-        public bool IsImageFeatureEnabled => _settingsService.IsImageFeatureEnabled;
-        public bool IsEbookFeatureEnabled => _settingsService.IsEbookFeatureEnabled;
 
         public string CurrentPath
         {
@@ -205,18 +187,6 @@ namespace Autonomuse.ViewModels
             await RefreshHistoryAsync();
             UiSettings = await _uiService.GetSettingsAsync();
             
-            var compressionStr = await _settingsService.GetSettingAsync("ImageCompressionLevel");
-            if (int.TryParse(compressionStr, out var level))
-            {
-                _imageCompressionLevel = level;
-                OnPropertyChanged(nameof(ImageCompressionLevel));
-            }
-            else
-            {
-                _imageCompressionLevel = 0;
-                OnPropertyChanged(nameof(ImageCompressionLevel));
-            }
-
             await RefreshThumbnailsAsync();
 
             var sterilizationStr = await _settingsService.GetSettingAsync("StringSterilization");
@@ -268,7 +238,7 @@ namespace Autonomuse.ViewModels
                 }
 
                 await _toolService.InstallToolAsync(toolName);
-                await Task.Delay(1000); // Wait briefly for PATH/system registry changes to settle
+                await Task.Delay(1000);
                 await RefreshToolsInfoAsync();
 
                 // Clear outdated flag on successful update
@@ -372,7 +342,7 @@ namespace Autonomuse.ViewModels
 
         public async Task RefreshThumbnailsAsync()
         {
-            var tabs = new[] { "Dashboard", "Audio", "Video", "Images", "Books", "Settings" };
+            var tabs = new[] { "Dashboard", "Audio", "Video", "Settings" };
             var thumbs = new Dictionary<string, string>();
             foreach (var tab in tabs)
             {
@@ -469,7 +439,6 @@ namespace Autonomuse.ViewModels
 
         private async Task ApplyNewPathAsync(string oldPath, string newPath)
         {
-            // History Safety: if the new path was in history, remove it (it is now current)
             await _settingsService.RemovePathHistoryAsync(newPath);
 
             // 1. Record the OLD path to history
@@ -507,7 +476,6 @@ namespace Autonomuse.ViewModels
             var json = _colorService.SerializeTheme(theme);
             await _settingsService.SaveSettingAsync("UserAccents", json);
             
-            // Notify the manager to re-read and update the <style> tag
             Autonomuse.Components.AccentManager.NotifyThemeChanged();
         }
 

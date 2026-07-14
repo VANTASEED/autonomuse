@@ -5,11 +5,6 @@ using Autonomuse.Shared.Contracts;
 using Autonomuse.Shared.DTOs;
 using Autonomuse.Shared.Enums;
 using Microsoft.AspNetCore.Components.Forms;
-using CoenM.ImageHash;
-using CoenM.ImageHash.HashAlgorithms;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SkiaSharp;
 using System.Diagnostics;
 using System.IO;
 namespace Autonomuse.ViewModels
@@ -20,18 +15,13 @@ namespace Autonomuse.ViewModels
     {
         private readonly IAudioService _audioService;
         private readonly IVideoService _videoService;
-        private readonly IImageService _imageService;
-        private readonly IEBookService _ebookService;
         private readonly ISettingsService _settingsService;
         private readonly IYoutubeService _youtubeService;
         private readonly IExternalToolService _toolService;
 
         private MediaType _selectedMediaType = MediaType.Audio;
         private string? _selectedOrganizationGuid;
-        private string? _selectedChapterGuid;
         private string _newOrganizationName = string.Empty;
-        private int? _chapterNumber;
-        private string _chapterTitle = string.Empty;
         private string _statusMessage = string.Empty;
         private string _youtubeUrl = string.Empty;
         private bool _isUploading;
@@ -40,7 +30,6 @@ namespace Autonomuse.ViewModels
         private int _uploadedCount;
         private int _totalCount;
         private ObservableCollection<OrganizationOption> _organizationOptions = new();
-        private int _imageCompressionLevel;
         private Guid _inputFileKey = Guid.NewGuid();
         private Guid _statusId = Guid.NewGuid();
         private ObservableCollection<YoutubeDownloadFailure> _youtubeDownloadFailures = new();
@@ -53,8 +42,6 @@ namespace Autonomuse.ViewModels
         {
             [MediaType.Audio] = new(StringComparer.OrdinalIgnoreCase) { ".mp3", ".aac", ".wav", ".flac" },
             [MediaType.Video] = new(StringComparer.OrdinalIgnoreCase) { ".mp4", ".mkv", ".avi", ".mov", ".webm" },
-            [MediaType.Images] = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp" },
-            [MediaType.EBooks] = new(StringComparer.OrdinalIgnoreCase) { ".pdf", ".epub", ".cbz", ".cbr", ".mobi", ".jpg", ".jpeg", ".png" }
         };
 
         #region Properties
@@ -67,7 +54,6 @@ namespace Autonomuse.ViewModels
                 _selectedMediaType = value; 
                 OnPropertyChanged(); 
                 OnPropertyChanged(nameof(ShowOrganization)); 
-                OnPropertyChanged(nameof(ShowChapterFields)); 
                 OnPropertyChanged(nameof(ShowDropbox)); 
                 OnPropertyChanged(nameof(DropboxIcon)); 
                 OnPropertyChanged(nameof(DropboxLabel)); 
@@ -76,10 +62,6 @@ namespace Autonomuse.ViewModels
                 OnPropertyChanged(nameof(ShowYoutubeSection));
                 OnPropertyChanged(nameof(YoutubeDownloadButtonLabel));
 
-                if (value == MediaType.EBooks)
-                {
-                    _ = LoadChaptersAsync();
-                }
             }
         }
 
@@ -90,24 +72,8 @@ namespace Autonomuse.ViewModels
             { 
                 _selectedOrganizationGuid = value; 
                 OnPropertyChanged();
-                if (SelectedMediaType == MediaType.EBooks)
-                {
-                    _ = LoadChaptersAsync();
-                }
+
             }
-        }
-
-        public string? SelectedChapterGuid
-        {
-            get => _selectedChapterGuid;
-            set { _selectedChapterGuid = value; OnPropertyChanged(); }
-        }
-
-        private ObservableCollection<OrganizationOption> _chapters = new();
-        public ObservableCollection<OrganizationOption> Chapters
-        {
-            get => _chapters;
-            set { _chapters = value; OnPropertyChanged(); }
         }
 
         public ObservableCollection<OrganizationOption> OrganizationOptions
@@ -126,18 +92,6 @@ namespace Autonomuse.ViewModels
         {
             get => _inputFileKey;
             set { _inputFileKey = value; OnPropertyChanged(); }
-        }
-
-        public int? ChapterNumber
-        {
-            get => _chapterNumber;
-            set { _chapterNumber = value; OnPropertyChanged(); }
-        }
-
-        public string ChapterTitle
-        {
-            get => _chapterTitle;
-            set { _chapterTitle = value; OnPropertyChanged(); }
         }
 
         private CancellationTokenSource? _statusCts;
@@ -289,16 +243,8 @@ namespace Autonomuse.ViewModels
             set { _totalCount = value; OnPropertyChanged(); }
         }
 
-        // Computed properties
-        public int ImageCompressionLevel
-        {
-            get => _imageCompressionLevel;
-            set { _imageCompressionLevel = value; OnPropertyChanged(); }
-        }
-
         public bool ShowOrganization => SelectedMediaType != MediaType.None;
         public bool ShowPlaylistDropdown => ShowOrganization && !IsYoutubePlaylistUrl;
-        public bool ShowChapterFields => SelectedMediaType == MediaType.EBooks;
         public bool ShowDropbox => SelectedMediaType != MediaType.None && !IsYoutubeUrlNotEmpty;
         public bool ShowYoutubeSection => SelectedMediaType == MediaType.Audio || SelectedMediaType == MediaType.Video;
         public bool IsYoutubeUrlNotEmpty => !string.IsNullOrWhiteSpace(YoutubeUrl);
@@ -316,8 +262,6 @@ namespace Autonomuse.ViewModels
         {
             MediaType.Audio => "♪",
             MediaType.Video => "🎞",
-            MediaType.Images => "🖼",
-            MediaType.EBooks => "🕮",
             _ => "📁"
         };
 
@@ -325,8 +269,6 @@ namespace Autonomuse.ViewModels
         {
             MediaType.Audio => "Drop audio files here (MP3, AAC, WAV, FLAC)",
             MediaType.Video => "Drop video files here (MP4, MKV, AVI, MOV, WEBM)",
-            MediaType.Images => "Drop image files here (JPG, PNG, GIF, WEBP, BMP)",
-            MediaType.EBooks => "Drop book files or manga pages here (PDF, EPUB, CBZ, CBR, MOBI, JPG, PNG)",
             _ => "Select a media type first"
         };
 
@@ -334,8 +276,6 @@ namespace Autonomuse.ViewModels
         {
             MediaType.Audio => "Playlist",
             MediaType.Video => "Playlist",
-            MediaType.Images => "Album",
-            MediaType.EBooks => "Series",
             _ => ""
         };
 
@@ -343,42 +283,20 @@ namespace Autonomuse.ViewModels
             ? string.Join(",", ExtensionMap[SelectedMediaType])
             : "";
 
-        public bool IsImageFeatureEnabled => _settingsService.IsImageFeatureEnabled;
-        public bool IsEbookFeatureEnabled => _settingsService.IsEbookFeatureEnabled;
-
         #endregion
 
         public DashboardViewModel(
             IAudioService audioService,
             IVideoService videoService,
-            IImageService imageService,
-            IEBookService ebookService,
             ISettingsService settingsService,
             IYoutubeService youtubeService,
             IExternalToolService toolService)
         {
             _audioService = audioService;
             _videoService = videoService;
-            _imageService = imageService;
-            _ebookService = ebookService;
             _settingsService = settingsService;
             _youtubeService = youtubeService;
             _toolService = toolService;
-
-            _ = RefreshSettingsAsync();
-        }
-
-        public async Task RefreshSettingsAsync()
-        {
-            var compressionStr = await _settingsService.GetSettingAsync("ImageCompressionLevel");
-            if (int.TryParse(compressionStr, out var level))
-            {
-                ImageCompressionLevel = level;
-            }
-            else
-            {
-                ImageCompressionLevel = 0;
-            }
         }
 
         public async Task DownloadYoutubeAudioAsync()
@@ -491,14 +409,6 @@ namespace Autonomuse.ViewModels
                     var vPlaylists = await _videoService.GetPlaylistsAsync();
                     options = vPlaylists.Select(p => new OrganizationOption { GUID = p.GUID, Name = p.Name }).ToList();
                     break;
-                case MediaType.Images:
-                    var albums = await _imageService.GetAlbumsAsync();
-                    options = albums.Select(a => new OrganizationOption { GUID = a.GUID, Name = a.Name }).ToList();
-                    break;
-                case MediaType.EBooks:
-                    var series = await _ebookService.GetSeriesAsync();
-                    options = series.Select(s => new OrganizationOption { GUID = s.GUID, Name = s.Name }).ToList();
-                    break;
             }
 
             OrganizationOptions = new ObservableCollection<OrganizationOption>(options);
@@ -536,92 +446,10 @@ namespace Autonomuse.ViewModels
                     var vp = await _videoService.CreatePlaylistAsync(NewOrganizationName);
                     SelectedOrganizationGuid = vp.GUID;
                     break;
-                case MediaType.Images:
-                    var existingAlbums = await _imageService.GetAlbumsAsync();
-                    var existingAlbum = existingAlbums.FirstOrDefault(p => string.Equals(p.Name, NewOrganizationName, StringComparison.OrdinalIgnoreCase));
-                    if (existingAlbum != null)
-                    {
-                        SelectedOrganizationGuid = existingAlbum.GUID;
-                        NewOrganizationName = string.Empty;
-                        await LoadOrganizationOptionsAsync();
-                        return;
-                    }
-                    var album = await _imageService.CreateAlbumAsync(NewOrganizationName);
-                    SelectedOrganizationGuid = album.GUID;
-                    break;
-                case MediaType.EBooks:
-                    var ep = await _ebookService.CreateSeriesAsync(NewOrganizationName);
-                    SelectedOrganizationGuid = ep.GUID;
-                    break;
             }
 
             NewOrganizationName = string.Empty;
             await LoadOrganizationOptionsAsync();
-        }
-
-        public async Task LoadChaptersAsync()
-        {
-            if (string.IsNullOrEmpty(SelectedOrganizationGuid) || SelectedMediaType != MediaType.EBooks)
-            {
-                Chapters = new ObservableCollection<OrganizationOption>();
-                SelectedChapterGuid = null;
-                return;
-            }
-
-            try
-            {
-                var chapters = await _ebookService.GetChaptersBySeriesAsync(SelectedOrganizationGuid);
-                
-                // Sort descending by chapter number so latest is first
-                var sortedChapters = chapters.OrderByDescending(c => c.ChapterNumber).ToList();
-
-                Chapters = new ObservableCollection<OrganizationOption>(
-                    sortedChapters.Select(c => new OrganizationOption { GUID = c.GUID, Name = $"Ch. {c.ChapterNumber} - {c.Title}" })
-                );
-
-                // Auto-select latest chapter
-                if (Chapters.Any())
-                {
-                    SelectedChapterGuid = Chapters.First().GUID;
-                }
-                else
-                {
-                    SelectedChapterGuid = null;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Error loading chapters: {ex.Message}");
-            }
-        }
-
-        public async Task CreateNewChapterAsync()
-        {
-            if (string.IsNullOrEmpty(SelectedOrganizationGuid))
-            {
-                StatusMessage = "WARN: Please select a series first.";
-                return;
-            }
-            if (string.IsNullOrWhiteSpace(ChapterTitle))
-            {
-                StatusMessage = "WARN: Chapter name is required.";
-                return;
-            }
-
-            try
-            {
-                int num = ChapterNumber ?? 1;
-                var ch = await _ebookService.CreateChapterAsync(SelectedOrganizationGuid, num, ChapterTitle);
-                await LoadChaptersAsync();
-                SelectedChapterGuid = ch.GUID;
-                StatusMessage = $"SUCCESS: Chapter '{ChapterTitle}' created.";
-                ChapterTitle = string.Empty;
-                ChapterNumber = null; // Reset to show placeholder
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = $"ERROR: {ex.Message}";
-            }
         }
 
         public async Task HandleFileSelectedAsync(IReadOnlyList<IBrowserFile> files)
@@ -661,8 +489,6 @@ namespace Autonomuse.ViewModels
             var tempDir = Path.Combine(Path.GetTempPath(), "Autonomuse_Upload");
             if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
 
-            var mangaPagePaths = new List<string>();
-
             foreach (var file in validFiles)
             {
                 try
@@ -674,7 +500,7 @@ namespace Autonomuse.ViewModels
                         await stream.CopyToAsync(fs);
                     }
 
-                    var result = await ProcessLocalFileAsync(file.Name, tempPath, true, mangaPagePaths);
+                    var result = await ProcessLocalFileAsync(file.Name, tempPath, true);
                     if (result.Success) successCount++;
                     if (result.Duplicate) duplicateCount++;
                     if (result.Mapped) mappedCount++;
@@ -690,7 +516,7 @@ namespace Autonomuse.ViewModels
                 }
             }
 
-            await FinalizeUploadBatchAsync(mangaPagePaths, successCount, errorCount, duplicateCount, rejectedCount, mappedCount);
+            await FinalizeUploadBatchAsync(successCount, errorCount, duplicateCount, rejectedCount, mappedCount);
 
             // Reset InputFile component key to clear its state and fix drag-and-drop bug
             InputFileKey = Guid.NewGuid();
@@ -749,13 +575,11 @@ namespace Autonomuse.ViewModels
                     var errorCount = 0;
                     var duplicateCount = 0;
                     var mappedCount = 0;
-                    var mangaPagePaths = new List<string>();
-
                     foreach (var file in validFiles)
                     {
                         try
                         {
-                            var result = await ProcessLocalFileAsync(file!.FileName ?? "", file!.FullPath ?? "", false, mangaPagePaths);
+                            var result = await ProcessLocalFileAsync(file!.FileName ?? "", file!.FullPath ?? "", false);
                             if (result.Success) successCount++;
                             if (result.Duplicate) duplicateCount++;
                             if (result.Mapped) mappedCount++;
@@ -771,7 +595,7 @@ namespace Autonomuse.ViewModels
                         }
                     }
 
-                    await FinalizeUploadBatchAsync(mangaPagePaths, successCount, errorCount, duplicateCount, rejectedCount, mappedCount);
+            await FinalizeUploadBatchAsync(successCount, errorCount, duplicateCount, rejectedCount, mappedCount);
                 }
             }
             catch (Exception)
@@ -792,7 +616,7 @@ namespace Autonomuse.ViewModels
             return fileName;
         }
 
-        private async Task<(bool Success, bool Duplicate, bool Mapped)> ProcessLocalFileAsync(string fileName, string localPath, bool isTempFile, List<string> mangaPagePaths)
+        private async Task<(bool Success, bool Duplicate, bool Mapped)> ProcessLocalFileAsync(string fileName, string localPath, bool isTempFile)
         {
             bool skipUpload = false;
             
@@ -861,89 +685,6 @@ namespace Autonomuse.ViewModels
                 }
             }
 
-            ulong? generatedImageHash = null;
-
-            if (SelectedMediaType == MediaType.Images)
-            {
-                var titleToCheck = Path.GetFileNameWithoutExtension(fileName);
-                var extension = Path.GetExtension(fileName).ToLowerInvariant();
-                var existingImages = await _imageService.GetImagesByTitleAndSourceAsync(titleToCheck, "manual upload");
-
-                bool isDuplicate = false;
-                string? duplicateGuid = null;
-
-                if (existingImages.Any())
-                {
-                    var sameExtImages = existingImages.Where(i => i.Extension.Equals(extension, StringComparison.OrdinalIgnoreCase)).ToList();
-
-                    if (sameExtImages.Any())
-                    {
-                        var hashAlgorithm = new AverageHash();
-                        try
-                        {
-                            using var stream = File.OpenRead(localPath);
-                            using var imageToHash = SixLabors.ImageSharp.Image.Load<Rgba32>(stream);
-                            generatedImageHash = hashAlgorithm.Hash(imageToHash);
-                            
-                            foreach (var existImg in sameExtImages)
-                            {
-                                if (existImg.PerceptualHash.HasValue)
-                                {
-                                    var similarity = CompareHash.Similarity(generatedImageHash.Value, existImg.PerceptualHash.Value);
-                                    if (similarity > 80)
-                                    {
-                                        isDuplicate = true;
-                                        duplicateGuid = existImg.GUID;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"Error hashing image: {ex.Message}");
-                        }
-                    }
-                }
-
-                if (!isDuplicate && !generatedImageHash.HasValue)
-                {
-                    try
-                    {
-                        var hashAlgorithm = new AverageHash();
-                        using var stream = File.OpenRead(localPath);
-                        using var imageToHash = SixLabors.ImageSharp.Image.Load<Rgba32>(stream);
-                        generatedImageHash = hashAlgorithm.Hash(imageToHash);
-                    }
-                    catch { }
-                }
-
-                if (isDuplicate)
-                {
-                    var existingAlbums = await _imageService.GetAlbumsForImageAsync(duplicateGuid!);
-
-                    if (!string.IsNullOrEmpty(SelectedOrganizationGuid))
-                    {
-                        if (existingAlbums.Contains(SelectedOrganizationGuid))
-                        {
-                            skipUpload = true;
-                            return (Success: false, Duplicate: true, Mapped: false);
-                        }
-                        else
-                        {
-                            await _imageService.AddToAlbumAsync(SelectedOrganizationGuid!, duplicateGuid!);
-                            skipUpload = true;
-                            return (Success: false, Duplicate: true, Mapped: true);
-                        }
-                    }
-                    else
-                    {
-                        skipUpload = true;
-                        return (Success: false, Duplicate: true, Mapped: false);
-                    }
-                }
-            }
-
             if (skipUpload)
             {
                 if (isTempFile && File.Exists(localPath)) File.Delete(localPath);
@@ -996,90 +737,14 @@ namespace Autonomuse.ViewModels
                             await _videoService.AddToPlaylistAsync(SelectedOrganizationGuid, recordGuid);
                         break;
                     }
-                case MediaType.Images:
-                    {
-                        var uploadPath = localPath;
-                        bool wasCompressed = false;
-                        if (ImageCompressionLevel > 0)
-                        {
-                            var compressedPath = await CompressImageAsync(localPath, ImageCompressionLevel);
-                            if (compressedPath != localPath)
-                            {
-                                uploadPath = compressedPath;
-                                wasCompressed = true;
-                            }
-                        }
-
-                        var image = await _imageService.AddImageAsync(uploadPath, "manual upload", generatedImageHash);
-                        recordGuid = image.GUID;
-                        
-                        if (wasCompressed && File.Exists(uploadPath))
-                        {
-                            File.Delete(uploadPath);
-                            var dir = Path.GetDirectoryName(uploadPath);
-                            if (dir != null && Path.GetFileName(dir).StartsWith("Autonomuse_"))
-                            {
-                                try { Directory.Delete(dir, true); } catch { }
-                            }
-                        }
-
-                        if (!string.IsNullOrEmpty(SelectedOrganizationGuid))
-                            await _imageService.AddToAlbumAsync(SelectedOrganizationGuid!, recordGuid);
-                        break;
-                    }
-                case MediaType.EBooks:
-                    var ext = Path.GetExtension(fileName).ToLowerInvariant();
-                    bool isMangaPage = (ext == ".jpg" || ext == ".jpeg" || ext == ".png")
-                        && !string.IsNullOrEmpty(SelectedOrganizationGuid);
-
-                    if (isMangaPage)
-                    {
-                        mangaPagePaths.Add(localPath);
-                        // Do not delete temp manga pages here; handled in Finalize
-                        isTempFile = false; 
-                    }
-                    else
-                    {
-                        await _ebookService.AddEBookAsync(localPath, "manual upload", SelectedOrganizationGuid, SelectedChapterGuid);
-                    }
-                    break;
             }
 
             if (isTempFile && File.Exists(localPath)) File.Delete(localPath);
             return (Success: true, Duplicate: false, Mapped: false);
         }
 
-        private async Task FinalizeUploadBatchAsync(List<string> mangaPagePaths, int successCount, int errorCount, int duplicateCount, int rejectedCount, int mappedCount)
+        private async Task FinalizeUploadBatchAsync(int successCount, int errorCount, int duplicateCount, int rejectedCount, int mappedCount)
         {
-            if (SelectedMediaType == MediaType.EBooks && mangaPagePaths.Count > 0 && !string.IsNullOrEmpty(SelectedOrganizationGuid))
-            {
-                try
-                {
-                    string? finalChapterGuid = SelectedChapterGuid;
-                    if (string.IsNullOrEmpty(finalChapterGuid))
-                    {
-                        var chapter = await _ebookService.CreateChapterAsync(
-                            SelectedOrganizationGuid, ChapterNumber ?? 1,
-                            string.IsNullOrWhiteSpace(ChapterTitle) ? $"Chapter {ChapterNumber ?? 1}" : ChapterTitle);
-                        finalChapterGuid = chapter.GUID;
-                        await LoadChaptersAsync();
-                        SelectedChapterGuid = finalChapterGuid;
-                    }
-
-                    await _ebookService.AddPagesToChapterAsync(finalChapterGuid, mangaPagePaths);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Chapter creation error: {ex.Message}");
-                }
-
-                // Cleanup manga temp files
-                foreach (var tp in mangaPagePaths)
-                {
-                    if (File.Exists(tp)) File.Delete(tp);
-                }
-            }
-
             IsUploading = false;
 
             var parts = new List<string>();
@@ -1089,8 +754,7 @@ namespace Autonomuse.ViewModels
             
             if (mappedCount > 0)
             {
-                var orgType = SelectedMediaType == MediaType.Images ? "album" : "playlist";
-                parts.Add($"{mappedCount} duplicate(s) added to {orgType}");
+                parts.Add($"{mappedCount} duplicate(s) added to playlist");
             }
             
             var simpleDuplicates = duplicateCount - mappedCount;
@@ -1103,42 +767,6 @@ namespace Autonomuse.ViewModels
             if (errorCount > 0) StatusMessage = $"ERROR: {summary}";
             else if (duplicateCount > 0) StatusMessage = $"WARN: {summary}";
             else StatusMessage = $"SUCCESS: {summary}";
-        }
-
-        private async Task<string> CompressImageAsync(string sourcePath, int compressionLevel)
-        {
-            if (compressionLevel <= 0) return sourcePath;
-
-            try
-            {
-                var originalFileName = Path.GetFileName(sourcePath);
-                // Create a unique subfolder in temp to avoid filename collisions while preserving original filename
-                var tempSubFolder = Path.Combine(Path.GetTempPath(), "Autonomuse_" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(tempSubFolder);
-                var tempPath = Path.Combine(tempSubFolder, originalFileName);
-
-                await Task.Run(() =>
-                {
-                    using var stream = File.OpenRead(sourcePath);
-                    using var managedStream = new SKManagedStream(stream);
-                    using var bitmap = SKBitmap.Decode(managedStream);
-
-                    if (bitmap == null) throw new Exception("Failed to decode image for compression.");
-
-                    using var image = SKImage.FromBitmap(bitmap);
-                    using var data = image.Encode(SKEncodedImageFormat.Jpeg, 100 - compressionLevel);
-
-                    using var saveStream = File.OpenWrite(tempPath);
-                    data.SaveTo(saveStream);
-                });
-
-                return tempPath;
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Compression failed: {ex.Message}");
-                return sourcePath;
-            }
         }
 
         protected void OnPropertyChanged([CallerMemberName] string? propertyName = null)

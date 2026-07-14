@@ -170,6 +170,17 @@
     height: 16px;
 }
 
+.icon-playlist {
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M4 6h16v2H4V6zm0 4h16v2H4v-2zm0 4h10v2H4v-2zm12-1v6l5-3-5-3z'/%3E%3C/svg%3E") no-repeat center;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M4 6h16v2H4V6zm0 4h16v2H4v-2zm0 4h10v2H4v-2zm12-1v6l5-3-5-3z'/%3E%3C/svg%3E") no-repeat center;
+    background-color: var(--accent-base);
+    width: 16px;
+    height: 16px;
+    margin-right: 0.8rem;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
 .menu-item.delete-item {
     color: #ff4d4d;
 }
@@ -417,10 +428,10 @@
     color: #eee;
 }
 
-.status-pill.modified {
-    background: rgba(59, 130, 246, 0.15);
-    color: #60a5fa;
-    border: 1px solid rgba(96, 165, 250, 0.2);
+.status-pill.manual {
+    background: rgba(147, 51, 234, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(192, 132, 252, 0.2);
 }
 
 .status-pill.disabled {
@@ -1074,6 +1085,7 @@
     font-size: 0.85rem;
     font-weight: 500;
     transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
 .menu-item:hover {
@@ -1126,17 +1138,17 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     padding: 1.8rem;
-    animation: scaleUpModal 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: fadeUpModal 0.25s ease-out;
 }
 
-@keyframes scaleUpModal {
+@keyframes fadeUpModal {
     from {
-        transform: scale(0.9);
+        transform: translateY(20px);
         opacity: 0;
     }
 
     to {
-        transform: scale(1);
+        transform: translateY(0);
         opacity: 1;
     }
 }
@@ -1204,10 +1216,12 @@
 /* VHS Preview Card Inside Modal */
 .vhs-preview-card {
     position: relative;
-    width: 220px;
+    width: 280px;
     aspect-ratio: 16 / 11;
     cursor: pointer;
     overflow: visible;
+    padding: 1rem;
+    box-sizing: border-box;
 }
 
 .vhs-sleeve-container-modal {
@@ -1422,12 +1436,15 @@
     text-transform: uppercase;
 }
 
-.warning-desc {
-    font-size: 0.85rem;
-    color: #888;
-    margin: 0 auto 1.5rem auto;
-    max-width: 90%;
-    line-height: 1.4;
+.modal-body .warning-text {
+    color: #ff4d4d;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0;
+    background: rgba(255, 77, 77, 0.08);
+    border-left: 3px solid #ff4d4d;
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
 }
 
 .target-card-preview {

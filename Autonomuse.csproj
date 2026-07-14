@@ -17,7 +17,7 @@
         <ApplicationTitle>Autonomuse</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.reversedhorizonstudio.autonomuse</ApplicationId>
+        <ApplicationId>com.vantaseed.autonomuse</ApplicationId>
 
         <!-- Versions -->
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>

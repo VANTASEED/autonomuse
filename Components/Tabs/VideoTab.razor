@@ -18,13 +18,13 @@
                 @if (!_isSelectionMode)
                 {
                     <button class="action-btn" @onclick="ToggleSelectionMode">
-                        Select Videos
+                        Select
                     </button>
                 }
                 else
                 {
                     <div class="split-pill">
-                        <button class="split-btn" @onclick="ToggleSelectionMode">Cancel Selection</button>
+                        <button class="split-btn" @onclick="ToggleSelectionMode">Cancel</button>
                         <div class="divider"></div>
                         <button class="split-btn" @onclick="SelectAll">Select All</button>
                     </div>
@@ -33,11 +33,17 @@
                         <div class="confirm-group">
                             <span class="confirm-text">Delete @_selectedGuids.Count items?</span>
                             <button class="action-btn danger-btn" @onclick="ConfirmDeleteSelectedAsync">Confirm</button>
-                            <button class="action-btn" @onclick="() => _showDeleteConfirm = false">Cancel</button>
+                            <button class="action-btn select-audio" @onclick="() => _showDeleteConfirm = false">Cancel</button>
                         </div>
                     }
                     else
                     {
+                        <button class="action-btn" @onclick="LockSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
+                            <i class="icon-disable"></i> Lock (@_selectedGuids.Count)
+                        </button>
+                        <button class="action-btn" @onclick="UnlockSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
+                            <i class="icon-enable"></i> Unlock (@_selectedGuids.Count)
+                        </button>
                         <button class="action-btn danger-btn" @onclick="() => _showDeleteConfirm = true" disabled="@(_selectedGuids.Count == 0)">
                             Delete Selected (@_selectedGuids.Count)
                         </button>
@@ -60,15 +66,15 @@
                         <div class="search-tooltip">
                             <div class="tooltip-header">Search Tags</div>
                             <div class="tooltip-body">
-                                <p>Filter your gallery using tags separated by commas:</p>
+                                <p>Filter your library using tags separated by commas, <br/>and use underscores for multi-word tags:</p>
                                 <ul>
                                     <li><strong>source</strong> filter by source (e.g. <code>youtube</code>, <code>manual</code>)</li>
-                                    <li><strong>artist</strong> filter by creator/artist (e.g. <code>松永依織</code>)</li>
+                                    <li><strong>artist</strong> filter by creator/artist (e.g. <code>daft_punk</code>)</li>
                                     <li><strong>genre</strong> filter by genre (e.g. <code>Music</code>)</li>
                                     <li><strong>year</strong> filter by year (e.g. <code>2025</code>)</li>
                                     <li><strong>title</strong> filter by video title</li>
                                 </ul>
-                                <p class="tooltip-example">Example: <code>artist:松永依織, year:2025</code></p>
+                                <p class="tooltip-example">Example: <code>artist:daft_punk, year:2025</code></p>
                             </div>
                         </div>
                     </div>
@@ -111,7 +117,26 @@
                         <button class="split-btn @(_selectedSource == "youtube" ? "active" : "")" @onclick='() => SetSourceFilter("youtube")'>YouTube</button>
                     </div>
 
-                    <div class="playlist-filter">
+                    <div class="status-filter">
+                        <div class="custom-dropdown">
+                            <button class="dropdown-trigger @(_isStatusDropdownOpen ? "active" : "")" @onclick="ToggleStatusDropdown">
+                                <span class="dropdown-selected-text">@GetSelectedStatusDisplay()</span>
+                                <span class="dropdown-arrow">▼</span>
+                            </button>
+                            @if (_isStatusDropdownOpen)
+                            {
+                                <div class="dropdown-popup glass-card">
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "all" ? "active" : "")" @onclick='() => SelectMetadataStatus("all")'>All Status</div>
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "standard" ? "active" : "")" @onclick='() => SelectMetadataStatus("standard")'>Standard</div>
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "manual" ? "active" : "")" @onclick='() => SelectMetadataStatus("manual")'>Manual</div>
+                                    <div class="dropdown-item @(_selectedMetadataStatus == "disabled" ? "active" : "")" @onclick='() => SelectMetadataStatus("disabled")'>Locked</div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="playlist-filter">
                         <div class="custom-dropdown">
                             <button class="dropdown-trigger @(_isPlaylistDropdownOpen ? "active" : "")" @onclick="TogglePlaylistDropdown">
                                 <i class="icon-playlist"></i>
@@ -141,25 +166,6 @@
                                             @p.Name
                                         </div>
                                     }
-                                </div>
-                            }
-                        </div>
-                        </div>
-                    </div>
-
-                    <div class="status-filter">
-                        <div class="custom-dropdown">
-                            <button class="dropdown-trigger @(_isStatusDropdownOpen ? "active" : "")" @onclick="ToggleStatusDropdown">
-                                <span class="dropdown-selected-text">@GetSelectedStatusDisplay()</span>
-                                <span class="dropdown-arrow">▼</span>
-                            </button>
-                            @if (_isStatusDropdownOpen)
-                            {
-                                <div class="dropdown-popup glass-card">
-                                    <div class="dropdown-item @(_selectedMetadataStatus == "all" ? "active" : "")" @onclick='() => SelectMetadataStatus("all")'>All Status</div>
-                                    <div class="dropdown-item @(_selectedMetadataStatus == "standard" ? "active" : "")" @onclick='() => SelectMetadataStatus("standard")'>Standard</div>
-                                    <div class="dropdown-item @(_selectedMetadataStatus == "modified" ? "active" : "")" @onclick='() => SelectMetadataStatus("modified")'>Modified</div>
-                                    <div class="dropdown-item @(_selectedMetadataStatus == "disabled" ? "active" : "")" @onclick='() => SelectMetadataStatus("disabled")'>Locked</div>
                                 </div>
                             }
                         </div>
@@ -224,16 +230,12 @@
                                             @if (_openMenuGuid == record.GUID)
                                             {
                                                 <div class="context-menu glass-card">
-                                                    @if (!IsRecordLocked(record))
+                                                    @if (record.MetadataStatus == 1)
                                                     {
-                                                        @if (record.MetadataStatus == 1)
-                                                        {
-                                                            <button class="menu-item" @onclick="() => ResetMetadataAsync(record)" title="Reset metadata to original values">
-                                                                <i class="icon-restore"></i> Reset Metadata
-                                                            </button>
-                                                        }
-                                                        <button class="menu-item" @onclick="() => DeleteSingleVideoAsync(record)" title="Delete video record and file">
-                                                            <i class="icon-trash"></i> Delete
+                                                        <button class="menu-item" @onclick="() => ResetMetadataAsync(record)" 
+                                                                disabled="@IsRecordLocked(record)"
+                                                                title="Restore original metadata from backup">
+                                                            <i class="icon-restore"></i> Recover Original
                                                         </button>
                                                     }
                                                     <button class="menu-item" @onclick="() => ToggleMetadataDisabledAsync(record)" 
@@ -241,6 +243,13 @@
                                                         <i class="@(IsRecordLocked(record) ? "icon-enable" : "icon-disable")"></i> 
                                                         @(IsRecordLocked(record) ? "Unlock" : "Lock")
                                                     </button>
+                                                    @if (!IsRecordLocked(record))
+                                                    {
+                                                        <div class="dropdown-divider"></div>
+                                                        <button class="menu-item delete-item" @onclick="() => DeleteSingleVideoAsync(record)" title="Delete video record and file">
+                                                            <i class="icon-trash"></i> Delete
+                                                        </button>
+                                                    }
                                                 </div>
                                             }
                                         </div>
@@ -290,30 +299,20 @@
         </div>
     </div>
 
-    <!-- Premium Delete Confirmation Modal -->
     @if (_deleteConfirmRecord != null)
     {
         <div class="modal-backdrop" @onclick="CancelSingleDelete">
             <div class="modal-card glass-card" @onclick:stopPropagation>
                 <div class="modal-header">
-                    <h3>Confirm Deletion</h3>
+                    <h3>Delete Video</h3>
                 </div>
-                <div class="modal-body text-center">
-                    <div class="warning-icon-wrapper">
-                        <i class="icon-warning-large">⚠️</i>
-                    </div>
-                    <p class="warning-title">Delete Video permanently?</p>
-                    <p class="warning-desc">
-                        This will permanently delete the database record, physical video file, cover art, and any backups.
-                    </p>
-                    <div class="target-card-preview glass-card">
-                        <div class="preview-title">@_deleteConfirmRecord.Title</div>
-                        <div class="preview-meta">@(_deleteConfirmRecord.Artist ?? "Unknown Creator")</div>
-                    </div>
+                <div class="modal-body">
+                    <p class="modal-msg">Are you sure you want to delete <strong>@_deleteConfirmRecord.Title</strong>?</p>
+                    <p class="warning-text">This will permanently delete the video file, cover art, and metadata from your library. This action is irreversible.</p>
                 </div>
                 <div class="modal-footer">
                     <button class="action-btn select-audio" @onclick="CancelSingleDelete">Cancel</button>
-                    <button class="action-btn danger-btn" @onclick="ConfirmSingleDeleteAsync">Yes, Delete</button>
+                    <button class="action-btn danger-btn" @onclick="ConfirmSingleDeleteAsync">Delete</button>
                 </div>
             </div>
         </div>
@@ -676,7 +675,7 @@
 
         // 4. Metadata Status Filter
         if (_selectedMetadataStatus == "standard") results = results.Where(r => r.MetadataStatus == 0);
-        else if (_selectedMetadataStatus == "modified") results = results.Where(r => r.MetadataStatus == 1);
+        else if (_selectedMetadataStatus == "manual") results = results.Where(r => r.MetadataStatus == 1);
         else if (_selectedMetadataStatus == "disabled") results = results.Where(r => r.MetadataStatus >= 10);
 
         // 5. Sorting
@@ -740,28 +739,22 @@
 
     private void SelectAll()
     {
-        if (_selectedGuids.Count == FilteredRecords.Count(r => !IsRecordLocked(r)))
+        if (_selectedGuids.Count == FilteredRecords.Count)
         {
             _selectedGuids.Clear();
         }
         else
         {
-            _selectedGuids = FilteredRecords.Where(r => !IsRecordLocked(r)).Select(r => r.GUID).ToHashSet();
+            _selectedGuids = FilteredRecords.Select(r => r.GUID).ToHashSet();
         }
     }
 
     private void ToggleSelection(string guid)
     {
         if (_selectedGuids.Contains(guid))
-        {
             _selectedGuids.Remove(guid);
-        }
         else
-        {
-            var record = _videoRecords.FirstOrDefault(r => r.GUID == guid);
-            if (record != null && IsRecordLocked(record)) return;
             _selectedGuids.Add(guid);
-        }
     }
 
     private void HandleCardClick(VideoRecord record)
@@ -774,6 +767,34 @@
         {
             OpenMetadataEdit(record);
         }
+    }
+
+    private async Task LockSelectedAsync()
+    {
+        if (_selectedGuids.Count == 0) return;
+        var toLock = _videoRecords.Where(r => _selectedGuids.Contains(r.GUID) && !IsRecordLocked(r)).ToList();
+        foreach (var record in toLock)
+        {
+            record.MetadataStatus = 10 + record.MetadataStatus;
+            await VideoService.UpdateVideoRecordAsync(record);
+        }
+        _selectedGuids.Clear();
+        _isSelectionMode = false;
+        await LoadVideoRecordsAsync();
+    }
+
+    private async Task UnlockSelectedAsync()
+    {
+        if (_selectedGuids.Count == 0) return;
+        var toUnlock = _videoRecords.Where(r => _selectedGuids.Contains(r.GUID) && IsRecordLocked(r)).ToList();
+        foreach (var record in toUnlock)
+        {
+            record.MetadataStatus = record.MetadataStatus >= 10 ? record.MetadataStatus - 10 : 0;
+            await VideoService.UpdateVideoRecordAsync(record);
+        }
+        _selectedGuids.Clear();
+        _isSelectionMode = false;
+        await LoadVideoRecordsAsync();
     }
 
     private async Task ConfirmDeleteSelectedAsync()
@@ -859,7 +880,7 @@
     {
         _openMenuGuid = null;
         _editMetadataRecord = record;
-        _editTitle = record.Title;
+        _editTitle = record.AlternativeTitle ?? record.Title;
         _editArtist = record.Artist ?? "";
         _editGenre = record.Genre ?? "";
         _editYear = record.Year;
@@ -944,7 +965,6 @@
                 await EnsureVideoBackupCreatedAsync(record);
             }
 
-            record.Title = _editTitle;
             record.AlternativeTitle = _editTitle;
             record.Artist = _editArtist;
             record.Genre = _editGenre;
@@ -1063,7 +1083,7 @@
         return status switch
         {
             0 => "standard",
-            1 => "modified",
+            1 => "manual",
             _ => "standard"
         };
     }
@@ -1074,7 +1094,7 @@
         return status switch
         {
             0 => "Standard",
-            1 => "Modified",
+            1 => "Manual",
             _ => "Standard"
         };
     }
@@ -1085,7 +1105,7 @@
         return status switch
         {
             0 => "Standard",
-            1 => "Modified",
+            1 => "Manual",
             _ => "Standard"
         };
     }
@@ -1096,7 +1116,7 @@
         {
             "all" => "All Status",
             "standard" => "Standard",
-            "modified" => "Modified",
+            "manual" => "Manual",
             "disabled" => "Locked",
             _ => "All Status"
         };

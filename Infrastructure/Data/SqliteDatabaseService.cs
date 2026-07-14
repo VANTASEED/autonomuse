@@ -8,20 +8,13 @@ namespace Autonomuse.Infrastructure.Data
         private readonly string _dbPath;
         private readonly ILogger<SqliteDatabaseService> _logger;
         private bool _isDebugMode = false;
-        private bool _isImageFeatureEnabled = false;
-        private bool _isEbookFeatureEnabled = false;
-
         public bool IsDebugMode => _isDebugMode;
-        public bool IsImageFeatureEnabled => _isImageFeatureEnabled;
-        public bool IsEbookFeatureEnabled => _isEbookFeatureEnabled;
-
         public SqliteDatabaseService(ILogger<SqliteDatabaseService> logger)
         {
             _logger = logger;
             
-            // Per User request: Local/Autonomuse/com.reversedhorizonstudio.autonomuse/Data/setting.db
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var dbFolder = Path.Combine(localAppData, "Autonomuse", "com.reversedhorizonstudio.autonomuse", "Data");
+            var dbFolder = Path.Combine(localAppData, "Autonomuse", "com.vantaseed.autonomuse", "Data");
             
             if (!Directory.Exists(dbFolder))
             {
@@ -115,40 +108,6 @@ namespace Autonomuse.Infrastructure.Data
                 else
                 {
                     _isDebugMode = debugResult?.ToString()?.ToLower() == "true";
-                }
-
-                // 1b. Initialize ImageFeature
-                var imageFeatureCmd = connection.CreateCommand();
-                imageFeatureCmd.CommandText = "SELECT [Values] FROM Settings WHERE [Parameter] = 'ImageFeature'";
-                var imageFeatureResult = await imageFeatureCmd.ExecuteScalarAsync();
-
-                if (imageFeatureResult == null)
-                {
-                    var insertCmd = connection.CreateCommand();
-                    insertCmd.CommandText = "INSERT INTO Settings ([Parameter], [Values]) VALUES ('ImageFeature', 'false')";
-                    await insertCmd.ExecuteNonQueryAsync();
-                    _isImageFeatureEnabled = false;
-                }
-                else
-                {
-                    _isImageFeatureEnabled = imageFeatureResult?.ToString()?.ToLower() == "true";
-                }
-
-                // 1c. Initialize EbookFeature
-                var ebookFeatureCmd = connection.CreateCommand();
-                ebookFeatureCmd.CommandText = "SELECT [Values] FROM Settings WHERE [Parameter] = 'EbookFeature'";
-                var ebookFeatureResult = await ebookFeatureCmd.ExecuteScalarAsync();
-
-                if (ebookFeatureResult == null)
-                {
-                    var insertCmd = connection.CreateCommand();
-                    insertCmd.CommandText = "INSERT INTO Settings ([Parameter], [Values]) VALUES ('EbookFeature', 'false')";
-                    await insertCmd.ExecuteNonQueryAsync();
-                    _isEbookFeatureEnabled = false;
-                }
-                else
-                {
-                    _isEbookFeatureEnabled = ebookFeatureResult?.ToString()?.ToLower() == "true";
                 }
 
                 // 2. Initialize CoverArtQuality

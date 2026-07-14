@@ -14,7 +14,7 @@ namespace Autonomuse.Infrastructure.Data
 
             // Same folder as setting.db
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var dbFolder = Path.Combine(localAppData, "Autonomuse", "com.reversedhorizonstudio.autonomuse", "Data");
+            var dbFolder = Path.Combine(localAppData, "Autonomuse", "com.vantaseed.autonomuse", "Data");
 
             if (!Directory.Exists(dbFolder))
             {
@@ -147,84 +147,6 @@ namespace Autonomuse.Infrastructure.Data
                         FOREIGN KEY ([GUID]) REFERENCES Video([GUID])
                     );
 
-                    -- ===== IMAGES =====
-                    CREATE TABLE IF NOT EXISTS Image (
-                        [GUID] TEXT PRIMARY KEY,
-                        [FileName] TEXT NOT NULL,
-                        [Title] TEXT NOT NULL,
-                        [Extension] TEXT NOT NULL,
-                        [Source] TEXT NOT NULL,
-                        [FilePath] TEXT NOT NULL,
-                        [Width] INTEGER,
-                        [Height] INTEGER,
-                        [FileSize] INTEGER,
-                        [PerceptualHash] INTEGER,
-                        [CreatedAt] DATETIME NOT NULL,
-                        [UpdatedAt] DATETIME NOT NULL
-                    );
-
-                    CREATE TABLE IF NOT EXISTS ImageAlbum (
-                        [GUID] TEXT PRIMARY KEY,
-                        [Name] TEXT NOT NULL,
-                        [Description] TEXT,
-                        [CoverImageGUID] TEXT,
-                        [CreatedAt] DATETIME NOT NULL,
-                        [UpdatedAt] DATETIME NOT NULL
-                    );
-
-                    CREATE TABLE IF NOT EXISTS ImageAlbumItems (
-                        [GUID] TEXT PRIMARY KEY,
-                        [AlbumGUID] TEXT NOT NULL,
-                        [ImageGUID] TEXT NOT NULL,
-                        [OrderIndex] INTEGER NOT NULL,
-                        [AddedAt] DATETIME NOT NULL,
-                        FOREIGN KEY ([AlbumGUID]) REFERENCES ImageAlbum([GUID]),
-                        FOREIGN KEY ([ImageGUID]) REFERENCES Image([GUID])
-                    );
-
-                    -- ===== E-BOOKS =====
-                    CREATE TABLE IF NOT EXISTS EBook (
-                        [GUID] TEXT PRIMARY KEY,
-                        [FileName] TEXT NOT NULL,
-                        [Title] TEXT NOT NULL,
-                        [Extension] TEXT NOT NULL,
-                        [Source] TEXT NOT NULL,
-                        [FilePath] TEXT NOT NULL,
-                        [Author] TEXT,
-                        [PageCount] INTEGER,
-                        [FileSize] INTEGER,
-                        [CoverPath] TEXT,
-                        [CreatedAt] DATETIME NOT NULL,
-                        [UpdatedAt] DATETIME NOT NULL
-                    );
-
-                    CREATE TABLE IF NOT EXISTS EBookSeries (
-                        [GUID] TEXT PRIMARY KEY,
-                        [Name] TEXT NOT NULL,
-                        [Description] TEXT,
-                        [CreatedAt] DATETIME NOT NULL,
-                        [UpdatedAt] DATETIME NOT NULL
-                    );
-
-                    CREATE TABLE IF NOT EXISTS EBookChapter (
-                        [GUID] TEXT PRIMARY KEY,
-                        [SeriesGUID] TEXT NOT NULL,
-                        [ChapterNumber] INTEGER NOT NULL,
-                        [Title] TEXT NOT NULL,
-                        [CreatedAt] DATETIME NOT NULL,
-                        [UpdatedAt] DATETIME NOT NULL,
-                        FOREIGN KEY ([SeriesGUID]) REFERENCES EBookSeries([GUID])
-                    );
-
-                    CREATE TABLE IF NOT EXISTS EBookChapterPages (
-                        [GUID] TEXT PRIMARY KEY,
-                        [ChapterGUID] TEXT NOT NULL,
-                        [EBookGUID] TEXT NOT NULL,
-                        [PageIndex] INTEGER NOT NULL,
-                        [AddedAt] DATETIME NOT NULL,
-                        FOREIGN KEY ([ChapterGUID]) REFERENCES EBookChapter([GUID]),
-                        FOREIGN KEY ([EBookGUID]) REFERENCES EBook([GUID])
-                    );
                 ";
                 command.ExecuteNonQuery();
                 var verifyCmd = connection.CreateCommand();
@@ -232,20 +154,18 @@ namespace Autonomuse.Infrastructure.Data
                     SELECT count(*) FROM sqlite_master 
                     WHERE type='table' AND name IN (
                         'Audio', 'AudioPlaylist', 'AudioPlaylistItems',
-                        'Video', 'VideoPlaylist', 'VideoPlaylistItems',
-                        'Image', 'ImageAlbum', 'ImageAlbumItems',
-                        'EBook', 'EBookSeries', 'EBookChapter', 'EBookChapterPages'
+                        'Video', 'VideoPlaylist', 'VideoPlaylistItems'
                     );
                 ";
                 var tableCount = Convert.ToInt32(verifyCmd.ExecuteScalar());
 
-                if (tableCount == 14)
+                if (tableCount == 8)
                 {
-                    _logger.LogInformation("Media database verified successfully at {Path}. All 14 tables present.", _dbPath);
+                    _logger.LogInformation("Media database verified successfully at {Path}. All 8 tables present.", _dbPath);
                 }
                 else
                 {
-                    _logger.LogError("Media database initialization incomplete. Expected 14 tables, found {Count}", tableCount);
+                    _logger.LogError("Media database initialization incomplete. Expected 8 tables, found {Count}", tableCount);
                 }
 
                 // Migrations for existing databases
@@ -275,9 +195,7 @@ namespace Autonomuse.Infrastructure.Data
 
                 string[] tables = { 
                     "AudioPlaylistItems", "AudioPlaylist", "AudioBackup", "Audio", 
-                    "VideoPlaylistItems", "VideoPlaylist", "VideoBackup", "Video", 
-                    "ImageAlbumItems", "ImageAlbum", "Image", 
-                    "EBookChapterPages", "EBookChapter", "EBookSeries", "EBook" 
+                    "VideoPlaylistItems", "VideoPlaylist", "VideoBackup", "Video" 
                 };
 
                 foreach (var table in tables)

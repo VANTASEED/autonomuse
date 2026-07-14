@@ -48,8 +48,6 @@ namespace Autonomuse
             builder.Services.AddScoped<Autonomuse.Shared.Contracts.IAudioService, Autonomuse.Services.Orchestration.AudioService>();
             builder.Services.AddScoped<Autonomuse.Shared.Contracts.IAudioEnrichmentService, Autonomuse.Services.Orchestration.AudioEnrichmentService>();
             builder.Services.AddScoped<Autonomuse.Shared.Contracts.IVideoService, Autonomuse.Services.Orchestration.VideoService>();
-            builder.Services.AddScoped<Autonomuse.Shared.Contracts.IImageService, Autonomuse.Services.Orchestration.ImageService>();
-            builder.Services.AddScoped<Autonomuse.Shared.Contracts.IEBookService, Autonomuse.Services.Orchestration.EBookService>();
             builder.Services.AddScoped<Autonomuse.Shared.Contracts.IYoutubeService, Autonomuse.Services.Orchestration.YoutubeService>();
             builder.Services.AddSingleton<Autonomuse.Services.Orchestration.ColorThemeService>();
             builder.Services.AddSingleton<Autonomuse.Shared.Contracts.IHomeUIService, Autonomuse.Services.Orchestration.HomeUIService>();

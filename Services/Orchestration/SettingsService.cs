@@ -17,8 +17,6 @@ namespace Autonomuse.Services.Orchestration
         }
 
         public bool IsDebugMode => _dbService.IsDebugMode;
-        public bool IsImageFeatureEnabled => _dbService.IsImageFeatureEnabled;
-        public bool IsEbookFeatureEnabled => _dbService.IsEbookFeatureEnabled;
         public async Task InitializeCoreSettingsAsync() => await _dbService.InitializeCoreSettingsAsync();
 
         public async Task<string?> GetSettingAsync(string parameter)

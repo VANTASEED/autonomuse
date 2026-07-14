@@ -53,17 +53,6 @@
                     @onclick="() => SetTab(TabType.Audio)">Audio</button>
             <button class="menubutton @(ActiveTab == TabType.Video ? "active" : "")" 
                     @onclick="() => SetTab(TabType.Video)">Video</button>
-            @if (IsImageFeatureEnabled)
-            {
-                <button class="menubutton @(ActiveTab == TabType.Images ? "active" : "")" 
-                        @onclick="() => SetTab(TabType.Images)">Images</button>
-            }
-            @if (IsEbookFeatureEnabled)
-            {
-                <button class="menubutton @(ActiveTab == TabType.Books ? "active" : "")" 
-                        @onclick="() => SetTab(TabType.Books)">E-Books</button>
-            }
-            
             <div class="separator"></div>
             
             <button class="menubutton @(ActiveTab == TabType.Settings ? "active" : "")" 
@@ -87,12 +76,6 @@
                 case TabType.Video:
                     <VideoTab />
                     break;
-                case TabType.Images:
-                    <ImageTab />
-                    break;
-                case TabType.Books:
-                    <BookTab />
-                    break;
                 case TabType.Settings:
                     <SettingTab OnSettingsChanged="OnSettingsChanged" />
                     break;
@@ -107,8 +90,6 @@
         Dashboard,
         Audio,
         Video,
-        Images,
-        Books,
         Settings
     }
 
@@ -119,15 +100,10 @@
     private string Layer1Bg { get; set; } = string.Empty;
     private string Layer2Bg { get; set; } = string.Empty;
     private bool IsLayer1Active { get; set; } = true;
-    private bool IsImageFeatureEnabled { get; set; } = false;
-    private bool IsEbookFeatureEnabled { get; set; } = false;
-
     protected override async Task OnInitializedAsync()
     {
         Settings = await UIService.GetSettingsAsync();
         Layer1Bg = await UIService.GetBackgroundAsBase64Async(ActiveTab.ToString());
-        IsImageFeatureEnabled = SettingsService.IsImageFeatureEnabled;
-        IsEbookFeatureEnabled = SettingsService.IsEbookFeatureEnabled;
     }
 
     private async Task SetTab(TabType tab)

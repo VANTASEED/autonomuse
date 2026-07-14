@@ -81,53 +81,6 @@
         }
         
         <div class="glass-card full-width">
-            <h2 class="card-title">Image Processing</h2>
-            
-            <div class="personalization-columns">
-                <!-- Left: Image Compression -->
-                <div class="perso-column">
-                    <div class="setting-item">
-                        <label>Image Compression</label>
-                        <p class="setting-desc">Compress images during upload to save storage space.</p>
-                        <p class="setting-desc" style="color: var(--accent-base); opacity: 0.8; font-style: italic;">Current compression level: @(ViewModel.ImageCompressionLevel)%</p>
-                        
-                        <div class="toggle-group full-width mt-1">
-                            @foreach (var level in new[] { 0, 20, 40, 60, 80 })
-                            {
-                                <button class="toggle-btn level-btn @(ViewModel.ImageCompressionLevel == level ? "active" : "")" 
-                                        @onclick='() => { ViewModel.ImageCompressionLevel = level; }'>
-                                    @(level == 0 ? "No Compression" : level + "%")
-                                </button>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                <div class="perso-separator"></div>
-
-                <!-- Right: Cover Art Quality -->
-                <div class="perso-column">
-                    <div class="setting-item">
-                        <label>Enrichment Cover Art Quality</label>
-                        <p class="setting-desc">Choose the resolution for downloaded cover art during enrichment.</p>
-                        <p class="setting-desc" style="color: var(--accent-base); opacity: 0.8; font-style: italic;">Note: High quality images may increase enrichment time and storage usage.</p>
-                        
-                        <div class="toggle-group full-width mt-1">
-                            <button class="toggle-btn @(ViewModel.CoverArtQuality == "standard" ? "active" : "")" 
-                                    @onclick='() => { ViewModel.CoverArtQuality = "standard"; }'>
-                                Standard Quality
-                            </button>
-                            <button class="toggle-btn @(ViewModel.CoverArtQuality == "high" ? "active" : "")" 
-                                    @onclick='() => { ViewModel.CoverArtQuality = "high"; }'>
-                                High Quality
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="glass-card full-width">
             <h2 class="card-title">Audio & Video Title Sterilization</h2>
             <div class="setting-item">
                 <p class="setting-desc">Define words or symbols to automatically remove from media titles (e.g., "[OFFICIAL]", "(MV)"). Press comma or Enter to add.</p>
@@ -147,6 +100,25 @@
                                @bind:event="oninput"
                                @onkeyup="HandleSterilizationKeyUp" />
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card full-width">
+            <h2 class="card-title">Enrichment Cover Art Quality</h2>
+            <div class="setting-item">
+                <p class="setting-desc">Choose the resolution for downloaded cover art during enrichment.</p>
+                <p class="setting-desc" style="color: var(--accent-base); opacity: 0.8; font-style: italic;">Note: High quality images may increase enrichment time and storage usage.</p>
+                
+                <div class="toggle-group full-width mt-1">
+                    <button class="toggle-btn @(ViewModel.CoverArtQuality == "standard" ? "active" : "")" 
+                            @onclick='() => { ViewModel.CoverArtQuality = "standard"; }'>
+                        Standard Quality
+                    </button>
+                    <button class="toggle-btn @(ViewModel.CoverArtQuality == "high" ? "active" : "")" 
+                            @onclick='() => { ViewModel.CoverArtQuality = "high"; }'>
+                        High Quality
+                    </button>
                 </div>
             </div>
         </div>
@@ -615,10 +587,8 @@
                     <p class="setting-desc">Assign unique images for each section.</p>
                 </div>
                 <div class="bg-picker-grid">
-                    @foreach (var tab in new[] { "Dashboard", "Audio", "Video", "Images", "Books", "Settings" })
+                    @foreach (var tab in new[] { "Dashboard", "Audio", "Video", "Settings" })
                     {
-                        if (!ViewModel.IsImageFeatureEnabled && tab == "Images") continue;
-                        if (!ViewModel.IsEbookFeatureEnabled && tab == "Books") continue;
                         
                         <div class="bg-item">
                             <div class="pill-info">

@@ -5,8 +5,6 @@ namespace Autonomuse.Shared.Contracts
     public interface ISettingsService
     {
         bool IsDebugMode { get; }
-        bool IsImageFeatureEnabled { get; }
-        bool IsEbookFeatureEnabled { get; }
         Task InitializeCoreSettingsAsync();
         
         Task<string?> GetSettingAsync(string parameter);

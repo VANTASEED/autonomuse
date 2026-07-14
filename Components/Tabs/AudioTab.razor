@@ -26,19 +26,16 @@
                 }
                 else
                 {
-                    <button class="action-btn enrich-all" @onclick="EnrichAllAsync" disabled="@(_isEnrichingAll || _isSelectionMode)">
-                        <i class="icon-sparkles"></i> Enrich Library
-                    </button>
                     @if (!_isSelectionMode)
                     {
                         <button class="action-btn select-audio" @onclick="ToggleSelectionMode" disabled="@_isEnrichingAll">
-                            Select Audio
+                            Select
                         </button>
                     }
                     else
                     {
                         <div class="split-pill">
-                            <button class="split-btn" @onclick="ToggleSelectionMode">Cancel Selection</button>
+                            <button class="split-btn" @onclick="ToggleSelectionMode">Cancel</button>
                             <div class="divider"></div>
                             <button class="split-btn" @onclick="SelectAll">Select All</button>
                         </div>
@@ -53,7 +50,13 @@
                         else
                         {
                             <button class="action-btn enrich-selected" @onclick="EnrichSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
-                                <i class="icon-sparkles"></i> Enrich Selected (@_selectedGuids.Count)
+                                <i class="icon-sparkles"></i> Enrich (@_selectedGuids.Count)
+                            </button>
+                            <button class="action-btn" @onclick="LockSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
+                                <i class="icon-disable"></i> Lock (@_selectedGuids.Count)
+                            </button>
+                            <button class="action-btn" @onclick="UnlockSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
+                                <i class="icon-enable"></i> Unlock (@_selectedGuids.Count)
                             </button>
                             <button class="action-btn danger-btn" @onclick="() => _showDeleteConfirm = true" disabled="@(_selectedGuids.Count == 0)">
                                 Delete Selected (@_selectedGuids.Count)
@@ -77,7 +80,7 @@
                             <div class="search-tooltip">
                                 <div class="tooltip-header">Search Tags</div>
                                 <div class="tooltip-body">
-                                    <p>Filter your library using tags separated by commas:</p>
+                                    <p>Filter your library using tags separated by commas, <br/>and use underscores for multi-word tags:</p>
                                     <ul>
                                         <li><strong>source</strong> filter by source (e.g. <code>youtube</code>, <code>manual</code>)</li>
                                         <li><strong>artist</strong> filter by artist (e.g. <code>daft_punk</code>)</li>
@@ -343,7 +346,6 @@
             <div class="modal-card glass-card" @onclick:stopPropagation>
                 <div class="modal-header">
                     <h3>Delete Track</h3>
-                    <button class="close-btn" @onclick="CancelDeleteSingle">×</button>
                 </div>
                 <div class="modal-body">
                     <p class="modal-msg">Are you sure you want to delete <strong>@_recordToDelete.Title</strong>?</p>
@@ -573,20 +575,17 @@
     private List<string> _sterilizationTags = new();
     private bool _isLoading = true;
     
-    // Enrichment state
     private HashSet<string> _enrichingGuids = new();
     private bool _isEnrichingAll = false;
     private double _globalProgress = 0;
     private string _globalProgressMessage = "";
     private string? _openMenuGuid;
 
-    // Selection state
     private bool _isSelectionMode = false;
     private HashSet<string> _selectedGuids = new();
     private bool _showDeleteConfirm = false;
     private AudioRecord? _recordToDelete;
 
-    // Metadata Editing State
     private AudioRecord? _editMetadataRecord;
     private string _editTitle = "";
     private string _editArtist = "";
@@ -600,14 +599,12 @@
     private string _uploadedCoverArtFileName = "";
     private bool _isSavingMetadata = false;
 
-    // Inline Edit Modes
     private bool _editingTitleMode = false;
     private bool _editingArtistMode = false;
     private bool _editingAlbumMode = false;
     private bool _editingGenreMode = false;
     private bool _editingYearMode = false;
 
-    // Search and Filter state
     private string _searchQuery = "";
     private string _selectedSource = "all";
     private string _selectedStatus = "all";
@@ -1020,36 +1017,6 @@
         }
     }
 
-    private async Task EnrichAllAsync()
-    {
-        if (_isEnrichingAll) return;
-        
-        _isEnrichingAll = true;
-        _globalProgress = 0;
-        _globalProgressMessage = "Starting enrichment...";
-        StateHasChanged();
-
-        try
-        {
-            await EnrichmentService.EnrichAllAudioAsync((msg, progress) => {
-                _globalProgressMessage = msg;
-                _globalProgress = progress;
-                StateHasChanged();
-            });
-            
-            await LoadAudioRecordsAsync(); // Refresh final state
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Global enrichment failed: {ex.Message}");
-        }
-        finally
-        {
-            _isEnrichingAll = false;
-            StateHasChanged();
-        }
-    }
-
     private void ToggleSelectionMode()
     {
         _isSelectionMode = !_isSelectionMode;
@@ -1076,8 +1043,6 @@
         if (_selectedGuids.Contains(guid)) _selectedGuids.Remove(guid);
         else
         {
-            var record = _audioRecords?.FirstOrDefault(r => r.GUID == guid);
-            if (record != null && IsRecordLocked(record)) return;
             _selectedGuids.Add(guid);
         }
         _showDeleteConfirm = false;
@@ -1089,8 +1054,7 @@
         if (_audioRecords == null) return;
         foreach (var record in _audioRecords)
         {
-            if (!IsRecordLocked(record))
-                _selectedGuids.Add(record.GUID);
+            _selectedGuids.Add(record.GUID);
         }
         _showDeleteConfirm = false;
         StateHasChanged();
@@ -1322,7 +1286,6 @@
                 await EnsureAudioBackupCreatedAsync(record);
             }
 
-            record.Title = _editTitle;
             record.AlternativeTitle = _editTitle;
             record.Artist = _editArtist;
             record.Album = _editAlbum;
@@ -1352,6 +1315,34 @@
             _isSavingMetadata = false;
             StateHasChanged();
         }
+    }
+
+    private async Task LockSelectedAsync()
+    {
+        if (_selectedGuids.Count == 0) return;
+        var toLock = _audioRecords.Where(r => _selectedGuids.Contains(r.GUID) && !IsRecordLocked(r)).ToList();
+        foreach (var record in toLock)
+        {
+            record.EnrichmentStatus = 10 + record.EnrichmentStatus;
+            await AudioService.UpdateAudioRecordAsync(record);
+        }
+        _selectedGuids.Clear();
+        _isSelectionMode = false;
+        await LoadAudioRecordsAsync();
+    }
+
+    private async Task UnlockSelectedAsync()
+    {
+        if (_selectedGuids.Count == 0) return;
+        var toUnlock = _audioRecords.Where(r => _selectedGuids.Contains(r.GUID) && IsRecordLocked(r)).ToList();
+        foreach (var record in toUnlock)
+        {
+            record.EnrichmentStatus = record.EnrichmentStatus >= 10 ? record.EnrichmentStatus - 10 : 0;
+            await AudioService.UpdateAudioRecordAsync(record);
+        }
+        _selectedGuids.Clear();
+        _isSelectionMode = false;
+        await LoadAudioRecordsAsync();
     }
 
     private async Task EnrichSelectedAsync()
