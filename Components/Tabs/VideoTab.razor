@@ -10,7 +10,7 @@
     <div class="header">
         @if (_showPlaylistManager)
         {
-            <h1>Video Gallery / Video Playlist Manager</h1>
+            <h1>Video Gallery / Playlist Manager</h1>
             <p>Add or remove videos from your playlists</p>
         }
         else if (_showWatchManager)
@@ -781,6 +781,7 @@
         _showPlaylistManager = false;
         if (!_showWatchManager)
         {
+            await RefreshPlaylistCacheAsync();
             await LoadVideoRecordsAsync();
         }
         StateHasChanged();
@@ -789,7 +790,21 @@
     private async Task SyncWatchedPlaylistsAsync()
     {
         await WatchService.SyncAllAsync();
+        await RefreshPlaylistCacheAsync();
         await LoadVideoRecordsAsync();
+    }
+
+    private async Task RefreshPlaylistCacheAsync()
+    {
+        if (!string.IsNullOrEmpty(_selectedPlaylistId) && _selectedPlaylistId != "any-playlist" && _selectedPlaylistId != "none-playlist")
+        {
+            _playlistItems = await VideoService.GetVideoInPlaylistAsync(_selectedPlaylistId);
+        }
+        else
+        {
+            _playlistItems.Clear();
+            _guidsInAnyPlaylist = await VideoService.GetVideoGuidsInAnyPlaylistAsync();
+        }
     }
 
     private void ToggleSelectionMode()

@@ -1069,6 +1069,7 @@
         _showPlaylistManager = false;
         if (!_showWatchManager)
         {
+            await RefreshPlaylistCacheAsync();
             await LoadAudioRecordsAsync();
         }
         StateHasChanged();
@@ -1077,7 +1078,21 @@
     private async Task SyncWatchedPlaylistsAsync()
     {
         await WatchService.SyncAllAsync();
+        await RefreshPlaylistCacheAsync();
         await LoadAudioRecordsAsync();
+    }
+
+    private async Task RefreshPlaylistCacheAsync()
+    {
+        if (!string.IsNullOrEmpty(_selectedPlaylistId) && _selectedPlaylistId != "any-playlist" && _selectedPlaylistId != "none-playlist")
+        {
+            _playlistItems = await AudioService.GetAudioInPlaylistAsync(_selectedPlaylistId);
+        }
+        else
+        {
+            _playlistItems.Clear();
+            _guidsInAnyPlaylist = await AudioService.GetAudioGuidsInAnyPlaylistAsync();
+        }
     }
 
     private void ToggleSelectionMode()

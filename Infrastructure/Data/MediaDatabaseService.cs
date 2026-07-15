@@ -153,7 +153,10 @@ namespace Autonomuse.Infrastructure.Data
                         [Url] TEXT NOT NULL,
                         [PlaylistName] TEXT,
                         [CreatedAt] DATETIME NOT NULL,
-                        [LastCheckedAt] DATETIME
+                        [LastCheckedAt] DATETIME,
+                        [IsValid] INTEGER NOT NULL DEFAULT 1,
+                        [LastError] TEXT,
+                        [LastStatus] TEXT
                     );
 
                     -- ===== VIDEO WATCHER =====
@@ -164,7 +167,8 @@ namespace Autonomuse.Infrastructure.Data
                         [CreatedAt] DATETIME NOT NULL,
                         [LastCheckedAt] DATETIME,
                         [IsValid] INTEGER NOT NULL DEFAULT 1,
-                        [LastError] TEXT
+                        [LastError] TEXT,
+                        [LastStatus] TEXT
                     );
 
                 ";
@@ -222,6 +226,28 @@ namespace Autonomuse.Infrastructure.Data
                 catch (Exception ex)
                 {
                     _logger.LogDebug("Migration for LastError column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE AudioWatchPlaylist ADD COLUMN [LastStatus] TEXT";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added LastStatus column to AudioWatchPlaylist table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for LastStatus column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE VideoWatchPlaylist ADD COLUMN [LastStatus] TEXT";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added LastStatus column to VideoWatchPlaylist table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for LastStatus column skipped (likely already exists): {Error}", ex.Message);
                 }
             }
             catch (Exception ex)

@@ -28,14 +28,6 @@
                     }
                 </button>
             </div>
-
-            @if (!string.IsNullOrEmpty(WatchService.LastSyncResult))
-            {
-                <div class="status-message">
-                    <span class="status-label">Result:</span>
-                    <span>@WatchService.LastSyncResult</span>
-                </div>
-            }
         </div>
 
         <div class="panel-watched glass-card">
@@ -69,11 +61,11 @@
                                 }
                                 @if (wp.LastCheckedAt.HasValue)
                                 {
-                                    <span class="playlist-checked">Last checked: @wp.LastCheckedAt.Value.ToLocalTime().ToString("g")</span>
+                                    <span class="playlist-checked">Last checked: @wp.LastCheckedAt.Value.ToLocalTime().ToString("g")@(!string.IsNullOrEmpty(wp.LastStatus) ? $" \u2022 Result: {wp.LastStatus}" : "")</span>
                                 }
                                 else
                                 {
-                                    <span class="playlist-checked">Not yet checked</span>
+                                    <span class="playlist-checked">Not yet checked@(!string.IsNullOrEmpty(wp.LastStatus) ? $" \u2022 Result: {wp.LastStatus}" : "")</span>
                                 }
                             </div>
                             <div class="playlist-actions">

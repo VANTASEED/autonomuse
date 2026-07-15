@@ -17,7 +17,6 @@ namespace Autonomuse.Services.Orchestration
         private bool _isSyncing;
 
         public bool IsSyncing => _isSyncing;
-        public string? LastSyncResult { get; private set; }
 
         public VideoWatchService(
             IServiceScopeFactory scopeFactory,
@@ -37,15 +36,10 @@ namespace Autonomuse.Services.Orchestration
         {
             if (_isSyncing) return;
             _isSyncing = true;
-            var lines = new List<string>();
             try
             {
                 var playlists = await GetWatchedPlaylistsAsync();
-                if (playlists.Count == 0)
-                {
-                    LastSyncResult = "No watched playlists.";
-                    return;
-                }
+                if (playlists.Count == 0) return;
 
                 using var scope = _scopeFactory.CreateScope();
                 var videoService = scope.ServiceProvider.GetRequiredService<IVideoService>();
@@ -54,23 +48,19 @@ namespace Autonomuse.Services.Orchestration
                 {
                     try
                     {
-                        var result = await SyncOneAsync(wp, videoService);
-                        lines.Add(result);
+                        await SyncOneAsync(wp, videoService);
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Sync failed for {Url}", wp.Url);
+                        await UpdateLastStatusAsync(wp.GUID, $"Sync failed: {ex.Message}");
                         await MarkInvalidAsync(wp.GUID, ex.Message);
-                        lines.Add($"{wp.PlaylistName ?? wp.Url}: {ex.Message}");
                     }
                 }
-
-                LastSyncResult = string.Join("; ", lines);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Sync failed");
-                LastSyncResult = $"Sync failed: {ex.Message}";
             }
             finally
             {
@@ -78,7 +68,7 @@ namespace Autonomuse.Services.Orchestration
             }
         }
 
-        private async Task<string> SyncOneAsync(VideoWatchPlaylist wp, IVideoService videoService)
+        private async Task SyncOneAsync(VideoWatchPlaylist wp, IVideoService videoService)
         {
             _logger.LogInformation("Syncing playlist: {Name} ({Url})", wp.PlaylistName ?? wp.Url, wp.Url);
 
@@ -89,7 +79,8 @@ namespace Autonomuse.Services.Orchestration
             {
                 var err = string.IsNullOrWhiteSpace(stderr) ? "Playlist not found or inaccessible" : stderr.Trim();
                 await MarkInvalidAsync(wp.GUID, err);
-                return $"{wp.PlaylistName ?? wp.Url}: invalid - {err}";
+                await UpdateLastStatusAsync(wp.GUID, $"Invalid - {err}");
+                return;
             }
 
             await MarkValidAsync(wp.GUID);
@@ -103,7 +94,8 @@ namespace Autonomuse.Services.Orchestration
             if (items.Count == 0)
             {
                 await UpdateLastCheckedAsync(wp.GUID);
-                return $"{wp.PlaylistName ?? wp.Url}: empty playlist";
+                await UpdateLastStatusAsync(wp.GUID, "Empty playlist");
+                return;
             }
 
             // Extract playlist name from metadata and persist it
@@ -117,6 +109,19 @@ namespace Autonomuse.Services.Orchestration
             // Find or create a VideoPlaylist for this watched playlist
             var playlist = await videoService.CreatePlaylistAsync(wp.PlaylistName ?? "YouTube Watch", wp.Url);
 
+            // Prune items that are no longer in the YouTube playlist
+            var currentYtIds = items.Select(i => i!.id!).ToHashSet();
+            var localItems = await videoService.GetVideoInPlaylistAsync(playlist.GUID);
+            var removedCount = 0;
+            foreach (var localItem in localItems)
+            {
+                if (!string.IsNullOrEmpty(localItem.YoutubeID) && !currentYtIds.Contains(localItem.YoutubeID))
+                {
+                    await videoService.RemoveFromPlaylistAsync(playlist.GUID, localItem.GUID);
+                    removedCount++;
+                }
+            }
+
             var newItems = new List<YtDlpFlatItem>();
             foreach (var item in items)
             {
@@ -127,7 +132,8 @@ namespace Autonomuse.Services.Orchestration
             if (newItems.Count == 0)
             {
                 await UpdateLastCheckedAsync(wp.GUID);
-                return $"{wp.PlaylistName ?? wp.Url}: up to date ({items.Count} items)";
+                await UpdateLastStatusAsync(wp.GUID, $"Up to date ({items.Count} items), {removedCount} removed from playlist");
+                return;
             }
 
             using var scope = _scopeFactory.CreateScope();
@@ -151,7 +157,7 @@ namespace Autonomuse.Services.Orchestration
             }
 
             await UpdateLastCheckedAsync(wp.GUID);
-            return $"{wp.PlaylistName ?? wp.Url}: {success} new, {errors} errors";
+            await UpdateLastStatusAsync(wp.GUID, $"{success} new, {errors} errors, {removedCount} removed from playlist");
         }
 
         // ── CRUD ──────────────────────────────────────────────
@@ -164,7 +170,7 @@ namespace Autonomuse.Services.Orchestration
                 using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
                 await connection.OpenAsync();
                 var cmd = connection.CreateCommand();
-                cmd.CommandText = "SELECT [GUID], [Url], [PlaylistName], [CreatedAt], [LastCheckedAt], [IsValid], [LastError] FROM VideoWatchPlaylist ORDER BY [CreatedAt] DESC";
+                cmd.CommandText = "SELECT [GUID], [Url], [PlaylistName], [CreatedAt], [LastCheckedAt], [IsValid], [LastError], [LastStatus] FROM VideoWatchPlaylist ORDER BY [CreatedAt] DESC";
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
@@ -176,7 +182,8 @@ namespace Autonomuse.Services.Orchestration
                         CreatedAt = reader.GetDateTime(3),
                         LastCheckedAt = reader.IsDBNull(4) ? null : reader.GetDateTime(4),
                         IsValid = reader.GetInt32(5) == 1,
-                        LastError = reader.IsDBNull(6) ? null : reader.GetString(6)
+                        LastError = reader.IsDBNull(6) ? null : reader.GetString(6),
+                        LastStatus = reader.IsDBNull(7) ? null : reader.GetString(7)
                     });
                 }
             }
@@ -306,6 +313,21 @@ namespace Autonomuse.Services.Orchestration
                 await cmd.ExecuteNonQueryAsync();
             }
             catch (Exception ex) { _logger.LogError(ex, "Error updating playlist name"); }
+        }
+
+        private async Task UpdateLastStatusAsync(string guid, string status)
+        {
+            try
+            {
+                using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
+                await connection.OpenAsync();
+                var cmd = connection.CreateCommand();
+                cmd.CommandText = "UPDATE VideoWatchPlaylist SET [LastStatus] = @s WHERE [GUID] = @g";
+                cmd.Parameters.AddWithValue("@s", status);
+                cmd.Parameters.AddWithValue("@g", guid);
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch (Exception ex) { _logger.LogError(ex, "Error updating last status"); }
         }
 
         // ── DTO ───────────────────────────────────────────────

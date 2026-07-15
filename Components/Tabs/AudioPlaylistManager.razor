@@ -32,9 +32,39 @@
         </div>
 
         <div class="panel-right glass-card">
-            <h3 class="panel-title">All Audio</h3>
+            <div class="panel-title">
+                <span>All Audio</span>
+                <div class="sort-compound-pill">
+                    <div class="custom-dropdown sort-dropdown compound-left">
+                        <button class="dropdown-trigger @(_isSortOpen ? "active" : "")" @onclick="ToggleSort">
+                            <span class="dropdown-selected-text">@GetSortLabel()</span>
+                            <span class="dropdown-arrow">▼</span>
+                        </button>
+                        @if (_isSortOpen)
+                        {
+                            <div class="dropdown-popup glass-card">
+                                <div class="dropdown-item @(_sortField == "name" ? "active" : "")" @onclick='() => SelectSort("name")'>
+                                    <i class="icon-sort-name"></i>
+                                    <span>Name</span>
+                                </div>
+                                <div class="dropdown-item @(_sortField == "added" ? "active" : "")" @onclick='() => SelectSort("added")'>
+                                    <i class="icon-sort-date"></i>
+                                    <span>Date Added</span>
+                                </div>
+                                <div class="dropdown-item @(_sortField == "checked" ? "active" : "")" @onclick='() => SelectSort("checked")'>
+                                    <i class="icon-sort-checked"></i>
+                                    <span>Checked / Unchecked</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    <button class="sort-toggle-btn compound-right" @onclick="ToggleSortDirection">
+                        @(_sortAscending ? "↑" : "↓")
+                    </button>
+                </div>
+            </div>
             <div class="music-list">
-                @foreach (var record in _allAudio)
+                @foreach (var record in _sortedAudio)
                 {
                     var isChecked = _checkedGuids.Contains(record.GUID);
                     var coverUrl = _coverArts.TryGetValue(record.GUID, out var url) ? url : "images/Assets/empty_cover.png";
@@ -80,6 +110,41 @@
     // ponytail: batch DB writes on close instead of per-toggle
     private HashSet<string> _pendingAdditions = new();
     private HashSet<string> _pendingRemovals = new();
+    private string _sortField = "name";
+    private bool _sortAscending = true;
+    private bool _isSortOpen = false;
+
+    private IEnumerable<AudioRecord> _sortedAudio
+    {
+        get
+        {
+            var sorted = _sortField switch
+            {
+                "added" => _allAudio.OrderBy(i => i.CreatedAt),
+                "checked" => _allAudio.OrderBy(i => _checkedGuids.Contains(i.GUID) ? 0 : 1),
+                _ => _allAudio.OrderBy(i => (string.IsNullOrEmpty(i.AlternativeTitle) ? i.Title : i.AlternativeTitle) ?? "")
+            };
+            return _sortAscending ? sorted : sorted.Reverse();
+        }
+    }
+
+    private string GetSortLabel() => _sortField switch
+    {
+        "name" => "Name",
+        "added" => "Date Added",
+        "checked" => "Checked / Unchecked",
+        _ => "Name"
+    };
+
+    private void ToggleSort() => _isSortOpen = !_isSortOpen;
+
+    private void SelectSort(string field)
+    {
+        _sortField = field;
+        _isSortOpen = false;
+    }
+
+    private void ToggleSortDirection() => _sortAscending = !_sortAscending;
 
     protected override async Task OnInitializedAsync()
     {

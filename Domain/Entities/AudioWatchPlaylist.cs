@@ -9,5 +9,6 @@ namespace Autonomuse.Domain.Entities
         public DateTime? LastCheckedAt { get; set; }
         public bool IsValid { get; set; } = true;
         public string? LastError { get; set; }
+        public string? LastStatus { get; set; }
     }
 }
