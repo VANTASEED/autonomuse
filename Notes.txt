@@ -7,8 +7,6 @@ wireless synchronize by local network
 
 
 must have feature :
-- playlist manager to manage music
-- playlist watcher, any playlist from youtube can be added, and on the list, add 2 button to apply watcher on audio, video, or both. need scheduler for interval watching. watcher will download audio/video/both if new list is added. the logic is for yt-dlp to download the playlist list first, check if there is new, then if there is new ones, then download that. so system doesnt have to redownload whole list and take out that already existed.
 - about page!
 - versioning and updating to check on github release.
 - API for future development possibility.

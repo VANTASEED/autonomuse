@@ -147,25 +147,46 @@ namespace Autonomuse.Infrastructure.Data
                         FOREIGN KEY ([GUID]) REFERENCES Video([GUID])
                     );
 
+                    -- ===== AUDIO WATCHER =====
+                    CREATE TABLE IF NOT EXISTS AudioWatchPlaylist (
+                        [GUID] TEXT PRIMARY KEY,
+                        [Url] TEXT NOT NULL,
+                        [PlaylistName] TEXT,
+                        [CreatedAt] DATETIME NOT NULL,
+                        [LastCheckedAt] DATETIME
+                    );
+
+                    -- ===== VIDEO WATCHER =====
+                    CREATE TABLE IF NOT EXISTS VideoWatchPlaylist (
+                        [GUID] TEXT PRIMARY KEY,
+                        [Url] TEXT NOT NULL,
+                        [PlaylistName] TEXT,
+                        [CreatedAt] DATETIME NOT NULL,
+                        [LastCheckedAt] DATETIME,
+                        [IsValid] INTEGER NOT NULL DEFAULT 1,
+                        [LastError] TEXT
+                    );
+
                 ";
                 command.ExecuteNonQuery();
                 var verifyCmd = connection.CreateCommand();
                 verifyCmd.CommandText = @"
                     SELECT count(*) FROM sqlite_master 
                     WHERE type='table' AND name IN (
-                        'Audio', 'AudioPlaylist', 'AudioPlaylistItems',
-                        'Video', 'VideoPlaylist', 'VideoPlaylistItems'
+                        'Audio', 'AudioPlaylist', 'AudioPlaylistItems', 'AudioBackup',
+                        'Video', 'VideoPlaylist', 'VideoPlaylistItems', 'VideoBackup',
+                        'AudioWatchPlaylist', 'VideoWatchPlaylist'
                     );
                 ";
                 var tableCount = Convert.ToInt32(verifyCmd.ExecuteScalar());
 
-                if (tableCount == 8)
+                if (tableCount == 10)
                 {
-                    _logger.LogInformation("Media database verified successfully at {Path}. All 8 tables present.", _dbPath);
+                    _logger.LogInformation("Media database verified successfully at {Path}. All 10 tables present.", _dbPath);
                 }
                 else
                 {
-                    _logger.LogError("Media database initialization incomplete. Expected 8 tables, found {Count}", tableCount);
+                    _logger.LogError("Media database initialization incomplete. Expected 10 tables, found {Count}", tableCount);
                 }
 
                 // Migrations for existing databases
@@ -179,6 +200,28 @@ namespace Autonomuse.Infrastructure.Data
                 catch (Exception ex)
                 {
                     _logger.LogDebug("Migration for MetadataStatus column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE AudioWatchPlaylist ADD COLUMN [IsValid] INTEGER NOT NULL DEFAULT 1";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added IsValid column to AudioWatchPlaylist table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for IsValid column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE AudioWatchPlaylist ADD COLUMN [LastError] TEXT";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added LastError column to AudioWatchPlaylist table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for LastError column skipped (likely already exists): {Error}", ex.Message);
                 }
             }
             catch (Exception ex)
@@ -195,7 +238,8 @@ namespace Autonomuse.Infrastructure.Data
 
                 string[] tables = { 
                     "AudioPlaylistItems", "AudioPlaylist", "AudioBackup", "Audio", 
-                    "VideoPlaylistItems", "VideoPlaylist", "VideoBackup", "Video" 
+                    "VideoPlaylistItems", "VideoPlaylist", "VideoBackup", "Video",
+                    "AudioWatchPlaylist"
                 };
 
                 foreach (var table in tables)

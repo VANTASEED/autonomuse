@@ -3,15 +3,31 @@
 @using Autonomuse.Shared.Utilities
 @inject IVideoService VideoService
 @inject ISettingsService SettingsService
+@inject VideoWatchService WatchService
 @inject IJSRuntime JSRuntime
 
 <div class="tab-content">
     <div class="header">
-        <h1>Video Gallery</h1>
-        <p>Watch and organize your movie and video clips</p>
+        @if (_showPlaylistManager)
+        {
+            <h1>Video Gallery / Video Playlist Manager</h1>
+            <p>Add or remove videos from your playlists</p>
+        }
+        else if (_showWatchManager)
+        {
+            <h1>Video Gallery / Watcher</h1>
+            <p>Monitor YouTube playlists for new videos</p>
+        }
+        else
+        {
+            <h1>Video Gallery</h1>
+            <p>Watch and organize your movie and video clips</p>
+        }
     </div>
 
     <div class="video-content">
+        @if (!_showPlaylistManager && !_showWatchManager)
+        {
         <!-- Control actions / Bulk operations bar -->
         <div class="control-cards glass-card">
             <div class="control-actions">
@@ -20,10 +36,20 @@
                     <button class="action-btn" @onclick="ToggleSelectionMode">
                         Select
                     </button>
+                    <button class="action-btn" @onclick="TogglePlaylistManager">
+                        Manage
+                    </button>
+                    <div class="split-pill mini">
+                        <button class="split-btn" @onclick="ToggleWatchManager">Watcher</button>
+                        <div class="divider"></div>
+                        <button class="split-btn" @onclick="SyncWatchedPlaylistsAsync" title="Sync all watched playlists">
+                            <span class="@(WatchService.IsSyncing ? "spin-icon" : "")">↻</span>
+                        </button>
+                    </div>
                 }
                 else
                 {
-                    <div class="split-pill">
+                    <div class="split-pill mini">
                         <button class="split-btn" @onclick="ToggleSelectionMode">Cancel</button>
                         <div class="divider"></div>
                         <button class="split-btn" @onclick="SelectAll">Select All</button>
@@ -70,7 +96,7 @@
                                 <ul>
                                     <li><strong>source</strong> filter by source (e.g. <code>youtube</code>, <code>manual</code>)</li>
                                     <li><strong>artist</strong> filter by creator/artist (e.g. <code>daft_punk</code>)</li>
-                                    <li><strong>genre</strong> filter by genre (e.g. <code>Music</code>)</li>
+                                    <li><strong>genre</strong> filter by genre (e.g. <code>entertainment</code>)</li>
                                     <li><strong>year</strong> filter by year (e.g. <code>2025</code>)</li>
                                     <li><strong>title</strong> filter by video title</li>
                                 </ul>
@@ -82,7 +108,17 @@
                 </div>
             </div>
         </div>
-
+        }
+        @if (_showPlaylistManager)
+        {
+            <VideoPlaylistManager OnClose="TogglePlaylistManager" />
+        }
+        else if (_showWatchManager)
+        {
+            <VideoWatchManager OnClose="ToggleWatchManager" />
+        }
+        else
+        {
         <div class="list-cards glass-card">
             <!-- Filter Bar -->
             <div class="filters-bar">
@@ -297,6 +333,7 @@
                 </div>
             }
         </div>
+        }
     </div>
 
     @if (_deleteConfirmRecord != null)
@@ -508,6 +545,8 @@
     private bool _isSelectionMode = false;
     private HashSet<string> _selectedGuids = new();
     private bool _showDeleteConfirm = false;
+    private bool _showPlaylistManager = false;
+    private bool _showWatchManager = false;
 
     // Context menu state
     private string? _openMenuGuid = null;
@@ -729,6 +768,30 @@
     }
 
     // Selection mode operations
+    private void TogglePlaylistManager()
+    {
+        _showPlaylistManager = !_showPlaylistManager;
+        _showWatchManager = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleWatchManager()
+    {
+        _showWatchManager = !_showWatchManager;
+        _showPlaylistManager = false;
+        if (!_showWatchManager)
+        {
+            await LoadVideoRecordsAsync();
+        }
+        StateHasChanged();
+    }
+
+    private async Task SyncWatchedPlaylistsAsync()
+    {
+        await WatchService.SyncAllAsync();
+        await LoadVideoRecordsAsync();
+    }
+
     private void ToggleSelectionMode()
     {
         _isSelectionMode = !_isSelectionMode;

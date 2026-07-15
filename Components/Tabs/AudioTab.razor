@@ -4,15 +4,31 @@
 @inject IAudioService AudioService
 @inject ISettingsService SettingsService
 @inject IAudioEnrichmentService EnrichmentService
+@inject AudioWatchService WatchService
 @inject IJSRuntime JSRuntime
 
 <div class="tab-content">
     <div class="header">
-        <h1>Music Library</h1>
-        <p>Manage and listen to your local audio collection</p>
+        @if (_showPlaylistManager)
+        {
+            <h1>Audio Library / Playlist Manager</h1>
+            <p>Add or remove tracks from your playlists</p>
+        }
+        else if (_showWatchManager)
+        {
+            <h1>Audio Library / Watcher</h1>
+            <p>Monitor YouTube playlists for new audio</p>
+        }
+        else
+        {
+            <h1>Audio Library</h1>
+            <p>Manage and listen to your local audio collection</p>
+        }
     </div>
 
     <div class="audio-content">
+        @if (!_showPlaylistManager && !_showWatchManager)
+        {
         <div class="control-cards glass-card">
             <div class="control-actions">
                 @if (_isEnrichingAll)
@@ -31,10 +47,20 @@
                         <button class="action-btn select-audio" @onclick="ToggleSelectionMode" disabled="@_isEnrichingAll">
                             Select
                         </button>
+                        <button class="action-btn" @onclick="TogglePlaylistManager">
+                            Manage
+                        </button>
+                        <div class="split-pill mini">
+                            <button class="split-btn" @onclick="ToggleWatchManager">Watcher</button>
+                            <div class="divider"></div>
+                            <button class="split-btn" @onclick="SyncWatchedPlaylistsAsync" title="Sync all watched playlists">
+                                <span class="@(WatchService.IsSyncing ? "spin-icon" : "")">↻</span>
+                            </button>
+                        </div>
                     }
                     else
                     {
-                        <div class="split-pill">
+                        <div class="split-pill mini">
                             <button class="split-btn" @onclick="ToggleSelectionMode">Cancel</button>
                             <div class="divider"></div>
                             <button class="split-btn" @onclick="SelectAll">Select All</button>
@@ -98,7 +124,17 @@
                 }
             </div>
         </div>
-
+        }
+        @if (_showPlaylistManager)
+        {
+            <AudioPlaylistManager OnClose="TogglePlaylistManager" />
+        }
+        else if (_showWatchManager)
+        {
+            <AudioWatchManager OnClose="ToggleWatchManager" />
+        }
+        else
+        {
         <div class="list-cards glass-card">
             <div class="filters-bar">
                 <div class="filter-group">
@@ -276,7 +312,7 @@
                                                     @if (!IsRecordLocked(record))
                                                     {
                                                         <div class="dropdown-divider"></div>
-                                                        <button class="menu-item delete-item" @onclick="() => DeleteSingleAudioAsync(record)" title="Delete music record and file">
+                                                        <button class="menu-item delete-item" @onclick="() => DeleteSingleAudioAsync(record)" title="Delete audio record and file">
                                                             <i class="icon-trash"></i> Delete
                                                         </button>
                                                     }
@@ -338,6 +374,7 @@
                 </div>
             }
         </div>
+        }
     </div>
 
     @if (_recordToDelete != null)
@@ -585,6 +622,8 @@
     private HashSet<string> _selectedGuids = new();
     private bool _showDeleteConfirm = false;
     private AudioRecord? _recordToDelete;
+    private bool _showPlaylistManager = false;
+    private bool _showWatchManager = false;
 
     private AudioRecord? _editMetadataRecord;
     private string _editTitle = "";
@@ -1015,6 +1054,30 @@
             _enrichingGuids.Remove(record.GUID);
             StateHasChanged();
         }
+    }
+
+    private void TogglePlaylistManager()
+    {
+        _showPlaylistManager = !_showPlaylistManager;
+        _showWatchManager = false;
+        StateHasChanged();
+    }
+
+    private async Task ToggleWatchManager()
+    {
+        _showWatchManager = !_showWatchManager;
+        _showPlaylistManager = false;
+        if (!_showWatchManager)
+        {
+            await LoadAudioRecordsAsync();
+        }
+        StateHasChanged();
+    }
+
+    private async Task SyncWatchedPlaylistsAsync()
+    {
+        await WatchService.SyncAllAsync();
+        await LoadAudioRecordsAsync();
     }
 
     private void ToggleSelectionMode()

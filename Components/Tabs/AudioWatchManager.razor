@@ -1,0 +1,177 @@
+@using Autonomuse.Domain.Entities
+@using Autonomuse.Shared.Contracts
+@inject AudioWatchService WatchService
+@inject ISettingsService SettingsService
+
+<div class="playlist-manager">
+    <div class="manager-controls glass-card">
+        <div class="manager-header">
+            <button class="action-btn" @onclick="CloseAsync">Back</button>
+        </div>
+    </div>
+
+    <div class="manager-panels">
+        <div class="panel-add glass-card">
+            <h3 class="panel-title">Add Playlist</h3>
+            <div class="add-url-section">
+                <input type="text" class="youtube-input" placeholder="Paste YouTube playlist URL..."
+                       @bind="_newUrl" @bind:event="oninput" />
+                <button class="action-btn gold" @onclick="AddWatchAsync" disabled="@_isAdding">Add</button>
+                <button class="action-btn gold" @onclick="RunSyncAsync" disabled="@WatchService.IsSyncing">
+                    @if (WatchService.IsSyncing)
+                    {
+                        <span class="spin-icon">↻</span><span> Syncing...</span>
+                    }
+                    else
+                    {
+                        <span>Sync All</span>
+                    }
+                </button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(WatchService.LastSyncResult))
+            {
+                <div class="status-message">
+                    <span class="status-label">Result:</span>
+                    <span>@WatchService.LastSyncResult</span>
+                </div>
+            }
+        </div>
+
+        <div class="panel-watched glass-card">
+            <h3 class="panel-title">Watched Playlists</h3>
+            <div class="playlist-list">
+                @foreach (var wp in _watchedPlaylists)
+                {
+                    <div class="playlist-item @(!wp.IsValid ? "invalid" : "")" @key="wp.GUID">
+                        @if (_editingGuid == wp.GUID)
+                        {
+                            <div class="edit-url-group">
+                                <input type="text" class="edit-url-input" @bind="_editUrl" @bind:event="oninput"
+                                       @onkeydown="HandleEditKeyDown" />
+                                <div class="edit-actions">
+                                    <button class="action-btn mini" @onclick="SaveEditAsync">Save</button>
+                                    <button class="action-btn mini danger-btn" @onclick="CancelEdit">Cancel</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="playlist-info">
+                                <span class="playlist-name">@(wp.PlaylistName ?? wp.Url)</span>
+                                @if (wp.PlaylistName != null)
+                                {
+                                    <span class="playlist-url">@wp.Url</span>
+                                }
+                                @if (!wp.IsValid)
+                                {
+                                    <span class="playlist-error">⛔ @wp.LastError</span>
+                                }
+                                @if (wp.LastCheckedAt.HasValue)
+                                {
+                                    <span class="playlist-checked">Last checked: @wp.LastCheckedAt.Value.ToLocalTime().ToString("g")</span>
+                                }
+                                else
+                                {
+                                    <span class="playlist-checked">Not yet checked</span>
+                                }
+                            </div>
+                            <div class="playlist-actions">
+                                <button class="action-btn circle-btn" @onclick="() => StartEdit(wp)" title="Edit URL">
+                                    <i class="icon-pencil"></i>
+                                </button>
+                                <button class="action-btn circle-btn danger-btn" @onclick="() => RemoveWatchAsync(wp.GUID)" title="Remove">
+                                    <i class="icon-trash"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+                @if (!_watchedPlaylists.Any())
+                {
+                    <div class="empty-list">No watched playlists yet</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private List<AudioWatchPlaylist> _watchedPlaylists = new();
+    private string _newUrl = "";
+    private bool _isAdding;
+    private string? _editingGuid;
+    private string _editUrl = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _watchedPlaylists = await WatchService.GetWatchedPlaylistsAsync();
+    }
+
+    private async Task AddWatchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newUrl)) return;
+        _isAdding = true;
+        try
+        {
+            await WatchService.AddWatchAsync(_newUrl.Trim());
+            _newUrl = "";
+            await LoadAsync();
+        }
+        finally
+        {
+            _isAdding = false;
+        }
+    }
+
+    private async Task RemoveWatchAsync(string guid)
+    {
+        await WatchService.RemoveWatchAsync(guid);
+        await LoadAsync();
+    }
+
+    private void StartEdit(AudioWatchPlaylist wp)
+    {
+        _editingGuid = wp.GUID;
+        _editUrl = wp.Url;
+    }
+
+    private void CancelEdit()
+    {
+        _editingGuid = null;
+        _editUrl = "";
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editUrl) || _editingGuid == null) return;
+        await WatchService.UpdateWatchUrlAsync(_editingGuid, _editUrl.Trim());
+        _editingGuid = null;
+        _editUrl = "";
+        await LoadAsync();
+    }
+
+    private async Task HandleEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SaveEditAsync();
+        else if (e.Key == "Escape") CancelEdit();
+    }
+
+    private async Task RunSyncAsync()
+    {
+        await WatchService.SyncAllAsync();
+        await LoadAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        await OnClose.InvokeAsync();
+    }
+}

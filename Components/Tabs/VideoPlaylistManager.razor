@@ -1,0 +1,140 @@
+@using Autonomuse.Domain.Entities
+@using Autonomuse.Shared.Contracts
+@inject IVideoService VideoService
+
+<div class="playlist-manager">
+    <div class="manager-controls glass-card">
+        <div class="manager-header">
+            <button class="action-btn" @onclick="() => OnClose.InvokeAsync()">Back</button>
+        </div>
+    </div>
+
+    <div class="manager-panels">
+        <div class="panel-left glass-card">
+            <h3 class="panel-title">Playlists</h3>
+            <div class="playlist-list">
+                @foreach (var playlist in _playlists)
+                {
+                    <div class="playlist-item @(_selectedPlaylist?.GUID == playlist.GUID ? "active" : "")"
+                         @onclick="() => SelectPlaylist(playlist)" @key="playlist.GUID">
+                        <span class="playlist-name">@playlist.Name</span>
+                        @if (_selectedPlaylist?.GUID == playlist.GUID)
+                        {
+                            <span class="playlist-count">@_selectedPlaylistCount</span>
+                        }
+                    </div>
+                }
+                @if (!_playlists.Any())
+                {
+                    <div class="empty-list">No playlists yet</div>
+                }
+            </div>
+        </div>
+
+        <div class="panel-right glass-card">
+            <h3 class="panel-title">All Videos</h3>
+            <div class="music-list">
+                @foreach (var record in _allVideos)
+                {
+                    var isChecked = _checkedGuids.Contains(record.GUID);
+                    var thumbnail = _thumbnails.TryGetValue(record.GUID, out var url) ? url : "images/Assets/empty_thumbnail.png";
+                    <div class="music-row @(isChecked ? "checked" : "") @(_selectedPlaylist != null ? "clickable" : "")" @key="record.GUID"
+                          @onclick="async () => { if (_selectedPlaylist != null) await ToggleVideo(record.GUID); }">
+                        <div class="music-cover-wrapper">
+                            <img class="music-cover-art" src="@thumbnail" alt="Thumbnail" />
+                        </div>
+                        <div class="music-info">
+                            <span class="music-name">@(string.IsNullOrEmpty(record.AlternativeTitle) ? record.Title : record.AlternativeTitle)</span>
+                            <span class="music-artist">@(record.Artist ?? "Unknown Creator")</span>
+                        </div>
+                        @if (_selectedPlaylist != null)
+                        {
+                        <label class="checkbox-label" @onclick:stopPropagation>
+                            <input type="checkbox" checked="@isChecked"
+                                   @onchange="() => ToggleVideo(record.GUID)" />
+                            <span class="checkbox-custom"></span>
+                        </label>
+                        }
+                    </div>
+                }
+                @if (!_allVideos.Any())
+                {
+                    <div class="empty-list">No videos in library</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private List<MediaPlaylist> _playlists = new();
+    private List<VideoRecord> _allVideos = new();
+    private MediaPlaylist? _selectedPlaylist;
+    private HashSet<string> _checkedGuids = new();
+    private HashSet<string> _playlistBaselineGuids = new();
+    private int _selectedPlaylistCount = 0;
+    private Dictionary<string, string> _thumbnails = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allVideos = await VideoService.GetAllVideosAsync();
+        _playlists = await VideoService.GetPlaylistsAsync();
+
+        foreach (var record in _allVideos)
+        {
+            if (!string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath))
+            {
+                try
+                {
+                    var bytes = await System.IO.File.ReadAllBytesAsync(record.ThumbnailPath);
+                    _thumbnails[record.GUID] = $"data:image/jpeg;base64,{Convert.ToBase64String(bytes)}";
+                }
+                catch
+                {
+                    _thumbnails[record.GUID] = "images/Assets/empty_thumbnail.png";
+                }
+            }
+            else
+            {
+                _thumbnails[record.GUID] = "images/Assets/empty_thumbnail.png";
+            }
+        }
+    }
+
+    private async Task SelectPlaylist(MediaPlaylist playlist)
+    {
+        _selectedPlaylist = playlist;
+        var items = await VideoService.GetVideoInPlaylistAsync(playlist.GUID);
+        _playlistBaselineGuids = items.Select(i => i.GUID).ToHashSet();
+        _checkedGuids = new HashSet<string>(_playlistBaselineGuids);
+        _selectedPlaylistCount = _checkedGuids.Count;
+    }
+
+    private async Task ToggleVideo(string videoGuid)
+    {
+        if (_selectedPlaylist == null) return;
+
+        if (_checkedGuids.Contains(videoGuid))
+        {
+            _checkedGuids.Remove(videoGuid);
+            if (_playlistBaselineGuids.Contains(videoGuid))
+            {
+                await VideoService.RemoveFromPlaylistAsync(_selectedPlaylist.GUID, videoGuid);
+                _playlistBaselineGuids.Remove(videoGuid);
+                _selectedPlaylistCount--;
+            }
+        }
+        else
+        {
+            _checkedGuids.Add(videoGuid);
+            if (!_playlistBaselineGuids.Contains(videoGuid))
+            {
+                await VideoService.AddToPlaylistAsync(_selectedPlaylist.GUID, videoGuid);
+                _playlistBaselineGuids.Add(videoGuid);
+                _selectedPlaylistCount++;
+            }
+        }
+    }
+}

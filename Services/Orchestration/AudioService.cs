@@ -363,6 +363,17 @@ namespace Autonomuse.Services.Orchestration
             await cmd.ExecuteNonQueryAsync();
         }
 
+        public async Task RemoveFromPlaylistAsync(string playlistGuid, string audioGuid)
+        {
+            using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
+            await connection.OpenAsync();
+            var cmd = connection.CreateCommand();
+            cmd.CommandText = "DELETE FROM AudioPlaylistItems WHERE [PlaylistGUID] = @pg AND [AudioGUID] = @ag";
+            cmd.Parameters.AddWithValue("@pg", playlistGuid);
+            cmd.Parameters.AddWithValue("@ag", audioGuid);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
         public async Task<AudioRecord?> GetAudioByTitleAndSourceAsync(string title, string source)
         {
             try

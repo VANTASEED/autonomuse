@@ -122,6 +122,18 @@ namespace Autonomuse.Infrastructure.Data
                     await insertCmd.ExecuteNonQueryAsync();
                 }
 
+                // 3. Initialize AudioWatcherSyncIntervalHours
+                var watchCmd = connection.CreateCommand();
+                watchCmd.CommandText = "SELECT COUNT(*) FROM Settings WHERE [Parameter] = 'AudioWatcherSyncIntervalHours'";
+                var watchExists = Convert.ToInt32(await watchCmd.ExecuteScalarAsync()) > 0;
+
+                if (!watchExists)
+                {
+                    var insertCmd = connection.CreateCommand();
+                    insertCmd.CommandText = "INSERT INTO Settings ([Parameter], [Values]) VALUES ('AudioWatcherSyncIntervalHours', '24')";
+                    await insertCmd.ExecuteNonQueryAsync();
+                }
+
                 _logger.LogInformation("Core settings initialized (DebugMode: {Status})", _isDebugMode);
             }
             catch (Exception ex)

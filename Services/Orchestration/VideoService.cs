@@ -256,6 +256,17 @@ namespace Autonomuse.Services.Orchestration
             await cmd.ExecuteNonQueryAsync();
         }
 
+        public async Task RemoveFromPlaylistAsync(string playlistGuid, string videoGuid)
+        {
+            using var conn = new SqliteConnection(_mediaDb.GetConnectionString());
+            await conn.OpenAsync();
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM VideoPlaylistItems WHERE [PlaylistGUID] = @pg AND [VideoGUID] = @vg";
+            cmd.Parameters.AddWithValue("@pg", playlistGuid);
+            cmd.Parameters.AddWithValue("@vg", videoGuid);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
         public async Task<VideoRecord?> GetVideoByTitleAndSourceAsync(string title, string source)
         {
             try
@@ -651,8 +662,9 @@ namespace Autonomuse.Services.Orchestration
                         Year = r.IsDBNull(15) ? null : r.GetInt32(15),
                         FileSize = r.IsDBNull(16) ? null : r.GetInt64(16),
                         ThumbnailPath = r.IsDBNull(17) ? null : r.GetString(17),
-                        CreatedAt = r.GetDateTime(18),
-                        UpdatedAt = r.GetDateTime(19)
+                        MetadataStatus = r.GetInt32(18),
+                        CreatedAt = r.GetDateTime(19),
+                        UpdatedAt = r.GetDateTime(20)
                     });
                 }
             }

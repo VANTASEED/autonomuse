@@ -23,6 +23,12 @@ namespace Autonomuse
             // External APIs
             builder.Services.AddHttpClient();
 
+            // Audio Watcher
+            builder.Services.AddSingleton<Autonomuse.Services.Orchestration.AudioWatchService>();
+
+            // Video Watcher
+            builder.Services.AddSingleton<Autonomuse.Services.Orchestration.VideoWatchService>();
+
             // Services
             builder.Services.AddSingleton<Autonomuse.Shared.Contracts.ISettingsService, Autonomuse.Services.Orchestration.SettingsService>();
             builder.Services.AddScoped<Autonomuse.Shared.Contracts.IAudioService, Autonomuse.Services.Orchestration.AudioService>();

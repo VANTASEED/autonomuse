@@ -1,0 +1,256 @@
+.playlist-manager {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.manager-controls {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.manager-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.manager-title {
+    color: var(--accent-base);
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0;
+}
+
+.action-btn {
+    background: var(--accent-base);
+    color: var(--accent-text);
+    border: 1px solid transparent;
+    padding: 0.5rem 1.5rem;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.action-btn:hover {
+    background: var(--accent-hover);
+}
+
+.manager-panels {
+    display: flex;
+    gap: 1.5rem;
+    min-height: 400px;
+}
+
+.panel-left {
+    flex: 0 0 300px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-right {
+    flex: 1;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-title {
+    color: var(--accent-base);
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.playlist-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.playlist-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #aaa;
+    font-size: 0.85rem;
+}
+
+.playlist-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+}
+
+.playlist-item.active {
+    background: var(--accent-base);
+    color: #000;
+    font-weight: 600;
+}
+
+.playlist-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.playlist-count {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    margin-left: 0.5rem;
+    flex-shrink: 0;
+}
+
+.playlist-item.active .playlist-count {
+    opacity: 0.8;
+}
+
+.music-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.music-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.8rem;
+    border-radius: 6px;
+    transition: background 0.2s ease;
+}
+
+.music-row.clickable {
+    cursor: pointer;
+}
+
+.music-cover-wrapper {
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-right: 0.8rem;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.music-cover-art {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.music-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.music-row.checked {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.music-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.music-name {
+    font-size: 0.85rem;
+    color: #fff;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.music-artist {
+    font-size: 0.7rem;
+    color: var(--accent-base);
+    opacity: 0.8;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin-left: 1rem;
+    flex-shrink: 0;
+}
+
+.checkbox-label input {
+    display: none;
+}
+
+.checkbox-custom {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.checkbox-label input:checked + .checkbox-custom {
+    background: var(--accent-base);
+    border-color: var(--accent-base);
+}
+
+.checkbox-label input:checked + .checkbox-custom::after {
+    content: "✓";
+    color: #000;
+    font-size: 0.8rem;
+    font-weight: 900;
+}
+
+.checkbox-label:hover .checkbox-custom {
+    border-color: var(--accent-base);
+}
+
+.panel-hint {
+    padding: 1rem;
+    text-align: center;
+    opacity: 0.5;
+    font-size: 0.8rem;
+    font-style: italic;
+    margin-bottom: 0.5rem;
+}
+
+.empty-list {
+    padding: 2rem;
+    text-align: center;
+    opacity: 0.5;
+    font-size: 0.85rem;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
