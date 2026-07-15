@@ -1,6 +1,6 @@
 namespace Autonomuse.Domain.Entities
 {
-    public class VideoPlaylist
+    public class MediaPlaylist
     {
         public string GUID { get; set; } = System.Guid.NewGuid().ToString();
         public string Name { get; set; } = string.Empty;

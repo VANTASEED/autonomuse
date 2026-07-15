@@ -6,8 +6,8 @@ namespace Autonomuse.Shared.Contracts
     {
         Task<VideoRecord> AddVideoAsync(string sourceFilePath, string source);
         Task<List<VideoRecord>> GetAllVideosAsync();
-        Task<List<VideoPlaylist>> GetPlaylistsAsync();
-        Task<VideoPlaylist> CreatePlaylistAsync(string name, string? description = null);
+        Task<List<MediaPlaylist>> GetPlaylistsAsync();
+        Task<MediaPlaylist> CreatePlaylistAsync(string name, string? description = null);
         Task AddToPlaylistAsync(string playlistGuid, string videoGuid);
         Task AddVideoRecordAsync(VideoRecord record);
         Task<VideoRecord?> GetVideoByTitleAndSourceAsync(string title, string source);

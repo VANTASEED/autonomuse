@@ -6,8 +6,8 @@ namespace Autonomuse.Shared.Contracts
     {
         Task<AudioRecord> AddAudioAsync(string sourceFilePath, string source);
         Task<List<AudioRecord>> GetAllAudioAsync();
-        Task<List<AudioPlaylist>> GetPlaylistsAsync();
-        Task<AudioPlaylist> CreatePlaylistAsync(string name, string? description = null);
+        Task<List<MediaPlaylist>> GetPlaylistsAsync();
+        Task<MediaPlaylist> CreatePlaylistAsync(string name, string? description = null);
         Task AddToPlaylistAsync(string playlistGuid, string audioGuid);
         Task AddAudioRecordAsync(AudioRecord record);
         Task<AudioRecord?> GetAudioByTitleAndSourceAsync(string title, string source);

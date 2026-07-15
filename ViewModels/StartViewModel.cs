@@ -96,9 +96,6 @@ namespace Autonomuse.ViewModels
                 StatusMessage = "External tools are ready.";
         }
 
-        [Obsolete("Use CheckToolsStatusAsync instead")]
-        public async Task CheckYtDlpStatusAsync() => await CheckToolsStatusAsync();
-
         public async Task InstallYtDlpAsync() => await InstallToolAsync("yt-dlp");
         public async Task InstallFpCalcAsync() => await InstallToolAsync("fpcalc");
 

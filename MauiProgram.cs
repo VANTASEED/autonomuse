@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Serilog;
 
 namespace Autonomuse
 {
@@ -7,22 +6,6 @@ namespace Autonomuse
     {
         public static MauiApp CreateMauiApp()
         {
-            // Configure Serilog for centralized logging (per architecture spec: Serilog MANDATORY)
-            var logDirectory = Path.Combine(AppContext.BaseDirectory, "buildlogging");
-            if (!Directory.Exists(logDirectory))
-            {
-                Directory.CreateDirectory(logDirectory);
-            }
-
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Information()
-                .WriteTo.File(
-                    Path.Combine(logDirectory, "autonomuse-.log"),
-                    rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 14,
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
-                .CreateLogger();
-
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
@@ -32,9 +15,6 @@ namespace Autonomuse
                 });
 
             builder.Services.AddMauiBlazorWebView();
-
-            // Serilog integration
-            builder.Logging.AddSerilog(Log.Logger);
 
             // Infrastructure & Data
             builder.Services.AddSingleton<Autonomuse.Infrastructure.Data.SqliteDatabaseService>();
@@ -55,9 +35,6 @@ namespace Autonomuse
             // Platform-specific services
             builder.Services.AddTransient<Autonomuse.Shared.Contracts.IFolderPicker, Autonomuse.Platforms.Windows.FolderPickerImplementation>();
             builder.Services.AddSingleton<Autonomuse.Shared.Contracts.IExternalToolService, Autonomuse.Services.Orchestration.ExternalToolService>();
-
-            // Resilience (Polly)
-            builder.Services.AddSingleton<Autonomuse.Services.Orchestration.ResiliencePipelineService>();
 
             // ViewModels
             builder.Services.AddScoped<Autonomuse.ViewModels.StartViewModel>();

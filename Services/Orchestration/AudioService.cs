@@ -275,9 +275,9 @@ namespace Autonomuse.Services.Orchestration
             }
         }
 
-        public async Task<List<AudioPlaylist>> GetPlaylistsAsync()
+        public async Task<List<MediaPlaylist>> GetPlaylistsAsync()
         {
-            var playlists = new List<AudioPlaylist>();
+            var playlists = new List<MediaPlaylist>();
             try
             {
                 using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
@@ -287,7 +287,7 @@ namespace Autonomuse.Services.Orchestration
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    playlists.Add(new AudioPlaylist
+                    playlists.Add(new MediaPlaylist
                     {
                         GUID = reader.GetString(0),
                         Name = reader.GetString(1),
@@ -301,7 +301,7 @@ namespace Autonomuse.Services.Orchestration
             return playlists;
         }
 
-        public async Task<AudioPlaylist> CreatePlaylistAsync(string name, string? description = null)
+        public async Task<MediaPlaylist> CreatePlaylistAsync(string name, string? description = null)
         {
             var existingPlaylists = await GetPlaylistsAsync();
             var existing = existingPlaylists.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -316,7 +316,7 @@ namespace Autonomuse.Services.Orchestration
                 return existing;
             }
 
-            var playlist = new AudioPlaylist { GUID = Guid.NewGuid().ToString(), Name = name, Description = description };
+            var playlist = new MediaPlaylist { GUID = Guid.NewGuid().ToString(), Name = name, Description = description };
             using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
             await connection.OpenAsync();
             var cmd = connection.CreateCommand();

@@ -6,7 +6,6 @@ using Autonomuse.Domain.Entities;
 using Autonomuse.Shared.Contracts;
 using Autonomuse.Shared.Utilities;
 using Microsoft.Extensions.Logging;
-using Polly;
 
 namespace Autonomuse.Services.Orchestration
 {
@@ -16,7 +15,6 @@ namespace Autonomuse.Services.Orchestration
         private readonly IExternalToolService _toolService;
         private readonly ISettingsService _settingsService;
         private readonly HttpClient _httpClient;
-        private readonly ResiliencePipeline _resilience;
         private readonly ILogger<AudioEnrichmentService> _logger;
 
         private const string AcoustIdApiKey = "2q6JP7xq7S";
@@ -31,14 +29,12 @@ namespace Autonomuse.Services.Orchestration
             IExternalToolService toolService,
             ISettingsService settingsService,
             HttpClient httpClient,
-            ResiliencePipelineService resilienceService,
             ILogger<AudioEnrichmentService> logger)
         {
             _audioService = audioService;
             _toolService = toolService;
             _settingsService = settingsService;
             _httpClient = httpClient;
-            _resilience = resilienceService.ExternalApi;
             _logger = logger;
 
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
@@ -223,10 +219,10 @@ namespace Autonomuse.Services.Orchestration
 
         private async Task<string?> GetMusicBrainzIdAsync(string fingerprint, double duration)
         {
-            return await _resilience.ExecuteAsync(async ct =>
+            return await RetryAsync(async () =>
             {
                 var url = $"https://api.acoustid.org/v2/lookup?client={AcoustIdApiKey}&duration={(int)Math.Round(duration)}&fingerprint={fingerprint}&meta=recordingids";
-                var response = await _httpClient.GetFromJsonAsync<AcoustIdResponse>(url, ct);
+                var response = await _httpClient.GetFromJsonAsync<AcoustIdResponse>(url);
 
                 return response?.Results?
                     .FirstOrDefault(r => r.Recordings != null && r.Recordings.Any())?
@@ -247,13 +243,13 @@ namespace Autonomuse.Services.Orchestration
                     await Task.Delay(TimeSpan.FromSeconds(1) - elapsed);
                 }
 
-                var result = await _resilience.ExecuteAsync(async ct =>
+                var result = await RetryAsync(async () =>
                 {
                     var url = $"https://musicbrainz.org/ws/2/recording/{mbId}?inc=artists+releases+genres+url-rels&fmt=json";
-                    var response = await _httpClient.GetAsync(url, ct);
+                    var response = await _httpClient.GetAsync(url);
                     response.EnsureSuccessStatusCode();
                     
-                    var json = await response.Content.ReadAsStringAsync(ct);
+                    var json = await response.Content.ReadAsStringAsync();
                     using var doc = JsonDocument.Parse(json);
                     var root = doc.RootElement;
 
@@ -288,7 +284,6 @@ namespace Autonomuse.Services.Orchestration
                             metadata.Genre = genreProp.GetString();
                     }
 
-                    // Fallback: If no genre on recording, check genres on the first release
                     if (string.IsNullOrEmpty(metadata.Genre) && root.TryGetProperty("releases", out var relsForGenre) && relsForGenre.GetArrayLength() > 0)
                     {
                         var firstRel = relsForGenre[0];
@@ -299,7 +294,6 @@ namespace Autonomuse.Services.Orchestration
                         }
                     }
 
-                    // Extract Apple Music External Links
                     if (root.TryGetProperty("relations", out var relations))
                     {
                         foreach (var rel in relations.EnumerateArray())
@@ -316,7 +310,6 @@ namespace Autonomuse.Services.Orchestration
                         }
                     }
 
-                    // If no link found on recording, check the primary release
                     if (string.IsNullOrEmpty(metadata.AppleMusicId) && !string.IsNullOrEmpty(metadata.ReleaseId))
                     {
                         var releaseMeta = await GetMusicBrainzReleaseMetadataAsync(metadata.ReleaseId);
@@ -347,13 +340,13 @@ namespace Autonomuse.Services.Orchestration
         {
             try
             {
-                var result = await _resilience.ExecuteAsync(async ct =>
+                var result = await RetryAsync(async () =>
                 {
                     var url = $"https://musicbrainz.org/ws/2/release/{releaseId}?inc=url-rels&fmt=json";
-                    var response = await _httpClient.GetAsync(url, ct);
+                    var response = await _httpClient.GetAsync(url);
                     if (!response.IsSuccessStatusCode) return null;
 
-                    var json = await response.Content.ReadAsStringAsync(ct);
+                    var json = await response.Content.ReadAsStringAsync();
                     using var doc = JsonDocument.Parse(json);
                     var root = doc.RootElement;
 
@@ -742,6 +735,17 @@ namespace Autonomuse.Services.Orchestration
             if (DateTime.TryParse(dateStr, out var date)) return date.Year;
             if (int.TryParse(dateStr.Split('-')[0], out var year)) return year;
             return null;
+        }
+
+        private static async Task<T> RetryAsync<T>(Func<Task<T>> action, int maxRetries = 3)
+        {
+            Exception? last = null;
+            for (int i = 0; i < maxRetries; i++)
+            {
+                try { return await action(); }
+                catch (Exception ex) { last = ex; await Task.Delay(1000 * (i + 1)); }
+            }
+            throw last ?? new InvalidOperationException("Retry failed");
         }
 
         // --- Response Models ---

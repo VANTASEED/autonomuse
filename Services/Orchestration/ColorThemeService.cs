@@ -1,6 +1,4 @@
-using System.Drawing;
 using System.Text.Json;
-using Color = System.Drawing.Color;
 
 namespace Autonomuse.Services.Orchestration
 {
@@ -14,49 +12,55 @@ namespace Autonomuse.Services.Orchestration
             public string Hover { get; set; } = "#ffb82e";
             public string Glow { get; set; } = "rgba(232, 163, 14, 0.15)";
             public string Subtle { get; set; } = "rgba(232, 163, 14, 0.05)";
-            public string ContrastText { get; set; } = "#000000"; // Default black text for gold
+            public string ContrastText { get; set; } = "#000000";
         }
 
         public AccentTheme GenerateTheme(string hex, bool isTextWhite)
         {
-            // If hex is empty or invalid, return the default Gold theme
             if (string.IsNullOrWhiteSpace(hex) || !hex.StartsWith("#") || (hex.Length != 7 && hex.Length != 4))
                 return new AccentTheme { ContrastText = isTextWhite ? "#FFFFFF" : "#000000" };
 
-            Color baseColor;
-            try 
-            {
-                baseColor = ColorTranslator.FromHtml(hex);
-            }
-            catch 
-            {
-                return new AccentTheme { ContrastText = isTextWhite ? "#FFFFFF" : "#000000" };
-            }
-            
+            var (r, g, b) = ParseHex(hex);
+            if (r < 0) return new AccentTheme { ContrastText = isTextWhite ? "#FFFFFF" : "#000000" };
+
             return new AccentTheme
             {
                 Base = hex,
-                Bright = ColorToHex(AdjustBrightness(baseColor, 1.2f)),
-                Dark = ColorToHex(AdjustBrightness(baseColor, 0.7f)),
-                Hover = ColorToHex(AdjustBrightness(baseColor, 1.1f)),
-                Glow = $"rgba({baseColor.R}, {baseColor.G}, {baseColor.B}, 0.15)",
-                Subtle = $"rgba({baseColor.R}, {baseColor.G}, {baseColor.B}, 0.05)",
+                Bright = ColorToHex(Adjust(r, g, b, 1.2f)),
+                Dark = ColorToHex(Adjust(r, g, b, 0.7f)),
+                Hover = ColorToHex(Adjust(r, g, b, 1.1f)),
+                Glow = $"rgba({r}, {g}, {b}, 0.15)",
+                Subtle = $"rgba({r}, {g}, {b}, 0.05)",
                 ContrastText = isTextWhite ? "#FFFFFF" : "#000000"
             };
         }
 
-        private Color AdjustBrightness(Color color, float factor)
+        private static (int r, int g, int b) ParseHex(string hex)
         {
-            float r = Math.Clamp(color.R * factor, 0, 255);
-            float g = Math.Clamp(color.G * factor, 0, 255);
-            float b = Math.Clamp(color.B * factor, 0, 255);
-            return Color.FromArgb(color.A, (int)r, (int)g, (int)b);
+            try
+            {
+                hex = hex.TrimStart('#');
+                if (hex.Length == 3)
+                    hex = string.Concat(hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]);
+                return (
+                    Convert.ToInt32(hex[..2], 16),
+                    Convert.ToInt32(hex[2..4], 16),
+                    Convert.ToInt32(hex[4..], 16)
+                );
+            }
+            catch { return (-1, -1, -1); }
         }
 
-        private string ColorToHex(Color color)
+        private static (int r, int g, int b) Adjust(int r, int g, int b, float factor)
         {
-            return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+            return (
+                Math.Clamp((int)(r * factor), 0, 255),
+                Math.Clamp((int)(g * factor), 0, 255),
+                Math.Clamp((int)(b * factor), 0, 255)
+            );
         }
+
+        private static string ColorToHex((int r, int g, int b) c) => $"#{c.r:X2}{c.g:X2}{c.b:X2}";
 
         public string SerializeTheme(AccentTheme theme) => JsonSerializer.Serialize(theme);
         public AccentTheme? DeserializeTheme(string json) => JsonSerializer.Deserialize<AccentTheme>(json);
@@ -64,12 +68,8 @@ namespace Autonomuse.Services.Orchestration
         public static string HexToRgb(string hex)
         {
             if (string.IsNullOrWhiteSpace(hex) || !hex.StartsWith("#")) return "18, 18, 18";
-            try
-            {
-                var color = ColorTranslator.FromHtml(hex);
-                return $"{color.R}, {color.G}, {color.B}";
-            }
-            catch { return "18, 18, 18"; }
+            var (r, g, b) = ParseHex(hex);
+            return r >= 0 ? $"{r}, {g}, {b}" : "18, 18, 18";
         }
     }
 }
