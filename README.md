@@ -2,8 +2,6 @@
   <img src="wwwroot/images/Assets/Autonomuse2.png" alt="Autonomuse Logo" width="220" />
 </p>
 
-<h1 align="center">Autonoμ'se</h1>
-
 <p align="center">
   <strong>Audio. Video. Autonomy.</strong><br>
   A local-first media preservation and metadata enrichment desktop application.

@@ -78,6 +78,9 @@
                             <button class="action-btn enrich-selected" @onclick="EnrichSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
                                 <i class="icon-sparkles"></i> Enrich (@_selectedGuids.Count)
                             </button>
+                            <button class="action-btn" @onclick="DeEnrichSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
+                                <i class="icon-restore"></i> De-Enrich (@_selectedGuids.Count)
+                            </button>
                             <button class="action-btn" @onclick="LockSelectedAsync" disabled="@(_selectedGuids.Count == 0)">
                                 <i class="icon-disable"></i> Lock (@_selectedGuids.Count)
                             </button>
@@ -274,9 +277,9 @@
                                         <p class="music-artist" title="@displayArtist">@displayArtist</p>
                                     </div>
                                     <div class="card-actions-stack" @onclick:stopPropagation>
-                                        <button class="enrich-btn @(IsRecordLocked(record) ? "enrich-disabled" : _enrichingGuids.Contains(record.GUID) ? "enriching" : "")" @onclick="() => EnrichSingleAsync(record)" 
-                                                disabled="@(_enrichingGuids.Contains(record.GUID) || IsRecordLocked(record))" 
-                                                title="@(IsRecordLocked(record) ? "Enrichment Locked" : "Enrich Metadata")">
+                                        <button class="enrich-btn @(IsEnrichmentDisabled(record) ? "enrich-disabled" : _enrichingGuids.Contains(record.GUID) ? "enriching" : "")" @onclick="() => EnrichSingleAsync(record)" 
+                                                disabled="@(_enrichingGuids.Contains(record.GUID) || IsEnrichmentDisabled(record))" 
+                                                title="@(IsRecordLocked(record) ? "Enrichment Locked" : record.EnrichmentStatus == 1 ? "Already Fully Enriched" : record.EnrichmentStatus == 4 ? "Manually Edited" : "Enrich Metadata")">
                                             @if (_enrichingGuids.Contains(record.GUID))
                                             {
                                                 <div class="btn-spinner"></div>
@@ -401,187 +404,265 @@
         <div class="modal-backdrop" @onclick="CloseMetadataEdit">
             <div class="modal-card metadata-modal glass-card" @onclick:stopPropagation>
                 <div class="modal-header">
-                    <h3>Metadata Details</h3>
+                    <div class="modal-tab-pills">
+                        <button class="modal-tab-btn @(_activeMetadataTab == "current" ? "active" : "")" @onclick='() => _activeMetadataTab = "current"'>
+                            Current Metadata
+                        </button>
+                        <button class="modal-tab-btn @(_activeMetadataTab == "original" ? "active" : "")" @onclick='() => _activeMetadataTab = "original"'>
+                            Original Data
+                        </button>
+                    </div>
+                    <button class="close-btn" @onclick="CloseMetadataEdit">×</button>
                 </div>
-                <div class="modal-body modal-columns">
-                    <div class="column-left">
-                        <div class="vinyl-preview-card">
-                            <div class="vinyl-wrapper-modal">
-                                <div class="vinyl-inner">
-                                    <div class="vinyl-rotating">
-                                        <img class="vinyl-disc" src="images/Assets/vinyl_disc.png" alt="Vinyl Disc" />
-                                        <img class="vinyl-center-art" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_cover.png" : _editCoverArtBase64)" alt="Center Art" />
+
+                @if (_activeMetadataTab == "current")
+                {
+                    <div class="modal-body modal-columns">
+                        <div class="column-left">
+                            <div class="vinyl-preview-card">
+                                <div class="vinyl-wrapper-modal">
+                                    <div class="vinyl-inner">
+                                        <div class="vinyl-rotating">
+                                            <img class="vinyl-disc" src="images/Assets/vinyl_disc.png" alt="Vinyl Disc" />
+                                            <img class="vinyl-center-art" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_cover.png" : _editCoverArtBase64)" alt="Center Art" />
+                                        </div>
                                     </div>
                                 </div>
+                                <div class="cover-art-container-modal">
+                                    <img class="cover-art" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_cover.png" : _editCoverArtBase64)" alt="Preview Cover Art" />
+                                </div>
                             </div>
-                            <div class="cover-art-container-modal">
-                                <img class="cover-art" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_cover.png" : _editCoverArtBase64)" alt="Preview Cover Art" />
+                        </div>
+                        <div class="column-right">
+                            <!-- Editable Fields Grid -->
+                            <div class="editable-grid">
+                                <!-- Title -->
+                                <div class="tech-item full-width editable-meta-item">
+                                    <span class="tech-label">Title</span>
+                                    <div class="editable-val-container">
+                                        @if (!IsRecordLocked(_editMetadataRecord) && _editingTitleMode)
+                                        {
+                                            <input type="text" class="form-input inline-edit" @bind="_editTitle" @onblur="() => _editingTitleMode = false" @onkeydown="OnTitleKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingTitleMode = true; }">@(string.IsNullOrEmpty(_editTitle) ? "N/A" : _editTitle)</span>
+                                            @if (!IsRecordLocked(_editMetadataRecord))
+                                            {
+                                                <button class="pencil-btn" @onclick="() => _editingTitleMode = true">✎</button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Artist -->
+                                <div class="tech-item editable-meta-item">
+                                    <span class="tech-label">Artist</span>
+                                    <div class="editable-val-container">
+                                        @if (!IsRecordLocked(_editMetadataRecord) && _editingArtistMode)
+                                        {
+                                            <input type="text" class="form-input inline-edit" @bind="_editArtist" @onblur="() => _editingArtistMode = false" @onkeydown="OnArtistKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingArtistMode = true; }">@(string.IsNullOrEmpty(_editArtist) ? "N/A" : _editArtist)</span>
+                                            @if (!IsRecordLocked(_editMetadataRecord))
+                                            {
+                                                <button class="pencil-btn" @onclick="() => _editingArtistMode = true">✎</button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Album -->
+                                <div class="tech-item editable-meta-item">
+                                    <span class="tech-label">Album</span>
+                                    <div class="editable-val-container">
+                                        @if (!IsRecordLocked(_editMetadataRecord) && _editingAlbumMode)
+                                        {
+                                            <input type="text" class="form-input inline-edit" @bind="_editAlbum" @onblur="() => _editingAlbumMode = false" @onkeydown="OnAlbumKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingAlbumMode = true; }">@(string.IsNullOrEmpty(_editAlbum) ? "N/A" : _editAlbum)</span>
+                                            @if (!IsRecordLocked(_editMetadataRecord))
+                                            {
+                                                <button class="pencil-btn" @onclick="() => _editingAlbumMode = true">✎</button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Genre -->
+                                <div class="tech-item editable-meta-item">
+                                    <span class="tech-label">Genre</span>
+                                    <div class="editable-val-container">
+                                        @if (!IsRecordLocked(_editMetadataRecord) && _editingGenreMode)
+                                        {
+                                            <input type="text" class="form-input inline-edit" @bind="_editGenre" @onblur="() => _editingGenreMode = false" @onkeydown="OnGenreKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingGenreMode = true; }">@(string.IsNullOrEmpty(_editGenre) ? "N/A" : _editGenre)</span>
+                                            @if (!IsRecordLocked(_editMetadataRecord))
+                                            {
+                                                <button class="pencil-btn" @onclick="() => _editingGenreMode = true">✎</button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Year -->
+                                <div class="tech-item editable-meta-item">
+                                    <span class="tech-label">Year</span>
+                                    <div class="editable-val-container">
+                                        @if (!IsRecordLocked(_editMetadataRecord) && _editingYearMode)
+                                        {
+                                            <input type="number" class="form-input inline-edit" @bind="_editYear" min="1000" max="3000" @onblur="() => _editingYearMode = false" @onkeydown="OnYearKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingYearMode = true; }">@(_editYear.HasValue ? _editYear.Value.ToString() : "N/A")</span>
+                                            @if (!IsRecordLocked(_editMetadataRecord))
+                                            {
+                                                <button class="pencil-btn" @onclick="() => _editingYearMode = true">✎</button>
+                                            }
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Cover Art Upload -->
+                                <div class="tech-item full-width editable-meta-item">
+                                    <span class="tech-label">Cover Art</span>
+                                    @if (IsRecordLocked(_editMetadataRecord))
+                                    {
+                                        <div class="file-upload-wrapper inline-upload" style="opacity: 0.5; cursor: not-allowed;">
+                                            <span class="file-upload-btn" style="pointer-events: none;">Choose Image</span>
+                                            <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="file-upload-wrapper inline-upload" @onclick="PickCoverArtNativeAsync">
+                                            <span class="file-upload-btn">Choose Image</span>
+                                            <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Technical Read-only Fields Grid -->
+                            <div class="technical-metadata-section">
+                                <div class="tech-grid-4">
+                                    <div class="tech-item">
+                                        <span class="tech-label">Source</span>
+                                        <span class="tech-val">@_editMetadataRecord.Source</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">YouTube ID</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.YoutubeID) ? "N/A" : _editMetadataRecord.YoutubeID)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Format</span>
+                                        <span class="tech-val">@_editMetadataRecord.Extension.ToUpper().TrimStart('.')</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">File Size</span>
+                                        <span class="tech-val">@FormatFileSize(_editMetadataRecord.FileSize)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Duration</span>
+                                        <span class="tech-val">@FormatDuration(_editMetadataRecord.Duration)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Bitrate</span>
+                                        <span class="tech-val">@(_editMetadataRecord.Bitrate.HasValue ? $"{_editMetadataRecord.Bitrate} kbps" : "N/A")</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Sample Rate</span>
+                                        <span class="tech-val">@(_editMetadataRecord.SampleRate.HasValue ? $"{(_editMetadataRecord.SampleRate.Value / 1000.0).ToString("0.#")} kHz" : "N/A")</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Channels</span>
+                                        <span class="tech-val">@(_editMetadataRecord.Channels.HasValue ? (_editMetadataRecord.Channels == 2 ? "Stereo" : "Mono") : "N/A")</span>
+                                    </div>
+                                    <div class="tech-item span-4">
+                                        <span class="tech-label">File Path</span>
+                                        <span class="tech-val" title="@_editMetadataRecord.FilePath">@_editMetadataRecord.FilePath</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="column-right">
-                        <!-- Editable Fields Grid -->
-                        <div class="editable-grid">
-                            <!-- Title -->
-                            <div class="tech-item full-width editable-meta-item">
-                                <span class="tech-label">Title</span>
-                                <div class="editable-val-container">
-                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingTitleMode)
-                                    {
-                                        <input type="text" class="form-input inline-edit" @bind="_editTitle" @onblur="() => _editingTitleMode = false" @onkeydown="OnTitleKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingTitleMode = true; }">@(string.IsNullOrEmpty(_editTitle) ? "N/A" : _editTitle)</span>
-                                        @if (!IsRecordLocked(_editMetadataRecord))
-                                        {
-                                            <button class="pencil-btn" @onclick="() => _editingTitleMode = true">✎</button>
-                                        }
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Artist -->
-                            <div class="tech-item editable-meta-item">
-                                <span class="tech-label">Artist</span>
-                                <div class="editable-val-container">
-                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingArtistMode)
-                                    {
-                                        <input type="text" class="form-input inline-edit" @bind="_editArtist" @onblur="() => _editingArtistMode = false" @onkeydown="OnArtistKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingArtistMode = true; }">@(string.IsNullOrEmpty(_editArtist) ? "N/A" : _editArtist)</span>
-                                        @if (!IsRecordLocked(_editMetadataRecord))
-                                        {
-                                            <button class="pencil-btn" @onclick="() => _editingArtistMode = true">✎</button>
-                                        }
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Album -->
-                            <div class="tech-item editable-meta-item">
-                                <span class="tech-label">Album</span>
-                                <div class="editable-val-container">
-                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingAlbumMode)
-                                    {
-                                        <input type="text" class="form-input inline-edit" @bind="_editAlbum" @onblur="() => _editingAlbumMode = false" @onkeydown="OnAlbumKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingAlbumMode = true; }">@(string.IsNullOrEmpty(_editAlbum) ? "N/A" : _editAlbum)</span>
-                                        @if (!IsRecordLocked(_editMetadataRecord))
-                                        {
-                                            <button class="pencil-btn" @onclick="() => _editingAlbumMode = true">✎</button>
-                                        }
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Genre -->
-                            <div class="tech-item editable-meta-item">
-                                <span class="tech-label">Genre</span>
-                                <div class="editable-val-container">
-                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingGenreMode)
-                                    {
-                                        <input type="text" class="form-input inline-edit" @bind="_editGenre" @onblur="() => _editingGenreMode = false" @onkeydown="OnGenreKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingGenreMode = true; }">@(string.IsNullOrEmpty(_editGenre) ? "N/A" : _editGenre)</span>
-                                        @if (!IsRecordLocked(_editMetadataRecord))
-                                        {
-                                            <button class="pencil-btn" @onclick="() => _editingGenreMode = true">✎</button>
-                                        }
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Year -->
-                            <div class="tech-item editable-meta-item">
-                                <span class="tech-label">Year</span>
-                                <div class="editable-val-container">
-                                    @if (!IsRecordLocked(_editMetadataRecord) && _editingYearMode)
-                                    {
-                                        <input type="number" class="form-input inline-edit" @bind="_editYear" min="1000" max="3000" @onblur="() => _editingYearMode = false" @onkeydown="OnYearKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => { if (!IsRecordLocked(_editMetadataRecord)) _editingYearMode = true; }">@(_editYear.HasValue ? _editYear.Value.ToString() : "N/A")</span>
-                                        @if (!IsRecordLocked(_editMetadataRecord))
-                                        {
-                                            <button class="pencil-btn" @onclick="() => _editingYearMode = true">✎</button>
-                                        }
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Cover Art Upload -->
-                            <div class="tech-item full-width editable-meta-item">
-                                <span class="tech-label">Cover Art</span>
-                                @if (IsRecordLocked(_editMetadataRecord))
-                                {
-                                    <div class="file-upload-wrapper inline-upload" style="opacity: 0.5; cursor: not-allowed;">
-                                        <span class="file-upload-btn" style="pointer-events: none;">Choose Image</span>
-                                        <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                }
+                else
+                {
+                    <div class="modal-body modal-columns">
+                        <div class="column-left">
+                            <div class="vinyl-preview-card">
+                                <div class="vinyl-wrapper-modal">
+                                    <div class="vinyl-inner">
+                                        <div class="vinyl-rotating">
+                                            <img class="vinyl-disc" src="images/Assets/vinyl_disc.png" alt="Vinyl Disc" />
+                                            <img class="vinyl-center-art" src="@(string.IsNullOrEmpty(_originalCoverArtBase64) ? "images/Assets/empty_cover.png" : _originalCoverArtBase64)" alt="Center Art" />
+                                        </div>
                                     </div>
-                                }
-                                else
-                                {
-                                    <div class="file-upload-wrapper inline-upload" @onclick="PickCoverArtNativeAsync">
-                                        <span class="file-upload-btn">Choose Image</span>
-                                        <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
-                                    </div>
-                                }
+                                </div>
+                                <div class="cover-art-container-modal">
+                                    <img class="cover-art" src="@(string.IsNullOrEmpty(_originalCoverArtBase64) ? "images/Assets/empty_cover.png" : _originalCoverArtBase64)" alt="Original Cover Art" />
+                                </div>
                             </div>
                         </div>
-
-                        <!-- Technical Read-only Fields Grid -->
-                        <div class="technical-metadata-section">
-                            <div class="tech-grid-4">
-                                <div class="tech-item">
-                                    <span class="tech-label">Source</span>
-                                    <span class="tech-val">@_editMetadataRecord.Source</span>
+                        <div class="column-right">
+                            @if (_originalMetadataBackup != null)
+                            {
+                                <div class="editable-grid">
+                                    <div class="tech-item full-width">
+                                        <span class="tech-label">Original Title</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.AlternativeTitle) ? "N/A" : _originalMetadataBackup.AlternativeTitle)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Original Artist</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.Artist) ? "N/A" : _originalMetadataBackup.Artist)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Original Album</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.Album) ? "N/A" : _originalMetadataBackup.Album)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Original Genre</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.Genre) ? "N/A" : _originalMetadataBackup.Genre)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Original Year</span>
+                                        <span class="tech-val">@(_originalMetadataBackup.Year.HasValue ? _originalMetadataBackup.Year.Value.ToString() : "N/A")</span>
+                                    </div>
+                                    <div class="tech-item full-width">
+                                        <span class="tech-label">Original YouTube ID</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.YoutubeID) ? "N/A" : _originalMetadataBackup.YoutubeID)</span>
+                                    </div>
+                                    <div class="tech-item full-width">
+                                        <span class="tech-label">Backup Ingested At</span>
+                                        <span class="tech-val">@_originalMetadataBackup.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                    </div>
                                 </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">YouTube ID</span>
-                                    <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.YoutubeID) ? "N/A" : _editMetadataRecord.YoutubeID)</span>
+                            }
+                            else
+                            {
+                                <div class="original-empty-banner">
+                                    <p>No original backup recorded for this track. This track is currently in its original ingested state.</p>
                                 </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Format</span>
-                                    <span class="tech-val">@_editMetadataRecord.Extension.ToUpper().TrimStart('.')</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">File Size</span>
-                                    <span class="tech-val">@FormatFileSize(_editMetadataRecord.FileSize)</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Duration</span>
-                                    <span class="tech-val">@FormatDuration(_editMetadataRecord.Duration)</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Bitrate</span>
-                                    <span class="tech-val">@(_editMetadataRecord.Bitrate.HasValue ? $"{_editMetadataRecord.Bitrate} kbps" : "N/A")</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Sample Rate</span>
-                                    <span class="tech-val">@(_editMetadataRecord.SampleRate.HasValue ? $"{(_editMetadataRecord.SampleRate.Value / 1000.0).ToString("0.#")} kHz" : "N/A")</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Channels</span>
-                                    <span class="tech-val">@(_editMetadataRecord.Channels.HasValue ? (_editMetadataRecord.Channels == 2 ? "Stereo" : "Mono") : "N/A")</span>
-                                </div>
-                                <div class="tech-item span-4">
-                                    <span class="tech-label">File Path</span>
-                                    <span class="tech-val" title="@_editMetadataRecord.FilePath">@_editMetadataRecord.FilePath</span>
-                                </div>
-                            </div>
+                            }
                         </div>
                     </div>
-                </div>
+                }
+
                 <div class="modal-footer">
-                    @if (IsRecordLocked(_editMetadataRecord))
+                    @if (_activeMetadataTab == "original")
+                    {
+                        <button class="action-btn select-audio" @onclick="CloseMetadataEdit">Close</button>
+                    }
+                    else if (IsRecordLocked(_editMetadataRecord))
                     {
                         <button class="action-btn select-audio" @onclick="CloseMetadataEdit">Close</button>
                     }
@@ -637,6 +718,9 @@
     private byte[]? _uploadedCoverArtBytes;
     private string _uploadedCoverArtFileName = "";
     private bool _isSavingMetadata = false;
+    private string _activeMetadataTab = "current";
+    private AudioBackup? _originalMetadataBackup;
+    private string _originalCoverArtBase64 = "";
 
     private bool _editingTitleMode = false;
     private bool _editingArtistMode = false;
@@ -1103,7 +1187,7 @@
         StateHasChanged();
     }
 
-    private void HandleAudioCardClick(AudioRecord record)
+    private async Task HandleAudioCardClick(AudioRecord record)
     {
         if (_isSelectionMode)
         {
@@ -1111,7 +1195,7 @@
         }
         else
         {
-            OpenMetadataEdit(record);
+            await OpenMetadataEditAsync(record);
         }
     }
 
@@ -1129,10 +1213,14 @@
 
     private void SelectAll()
     {
-        if (_audioRecords == null) return;
-        foreach (var record in _audioRecords)
+        if (FilteredRecords == null) return;
+        if (_selectedGuids.Count == FilteredRecords.Count && FilteredRecords.Count > 0)
         {
-            _selectedGuids.Add(record.GUID);
+            _selectedGuids.Clear();
+        }
+        else
+        {
+            _selectedGuids = FilteredRecords.Select(r => r.GUID).ToHashSet();
         }
         _showDeleteConfirm = false;
         StateHasChanged();
@@ -1209,7 +1297,7 @@
         }
     }
 
-    private void OpenMetadataEdit(AudioRecord record)
+    private async Task OpenMetadataEditAsync(AudioRecord record)
     {
         _openMenuGuid = null;
         _editMetadataRecord = record;
@@ -1224,12 +1312,49 @@
         _uploadedCoverArtBytes = null;
         _uploadedCoverArtFileName = "";
         _isSavingMetadata = false;
+        _activeMetadataTab = "current";
 
         _editingTitleMode = false;
         _editingArtistMode = false;
         _editingAlbumMode = false;
         _editingGenreMode = false;
         _editingYearMode = false;
+
+        // Fetch backup for original data tab
+        _originalMetadataBackup = await AudioService.GetAudioBackupAsync(record.GUID);
+        _originalCoverArtBase64 = "";
+
+        if (_originalMetadataBackup != null)
+        {
+            try
+            {
+                var libraryPath = await SettingsService.GetSettingAsync("LibraryPath");
+                string? backupArtPath = null;
+                if (!string.IsNullOrEmpty(libraryPath))
+                {
+                    var backupFolder = System.IO.Path.Combine(libraryPath, "Art", "Backup");
+                    var candidatePath = System.IO.Path.Combine(backupFolder, $"{record.GUID}.jpg");
+                    if (System.IO.File.Exists(candidatePath))
+                    {
+                        backupArtPath = candidatePath;
+                    }
+                }
+                if (string.IsNullOrEmpty(backupArtPath) && !string.IsNullOrEmpty(_originalMetadataBackup.CoverArtPath) && System.IO.File.Exists(_originalMetadataBackup.CoverArtPath))
+                {
+                    backupArtPath = _originalMetadataBackup.CoverArtPath;
+                }
+
+                if (!string.IsNullOrEmpty(backupArtPath) && System.IO.File.Exists(backupArtPath))
+                {
+                    var bytes = await System.IO.File.ReadAllBytesAsync(backupArtPath);
+                    _originalCoverArtBase64 = $"data:image/jpeg;base64,{Convert.ToBase64String(bytes)}";
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load original backup cover art: {ex.Message}");
+            }
+        }
 
         StateHasChanged();
     }
@@ -1308,6 +1433,12 @@
     {
         if (record == null) return false;
         return record.EnrichmentStatus == 3 || record.EnrichmentStatus >= 10;
+    }
+
+    private bool IsEnrichmentDisabled(AudioRecord record)
+    {
+        if (record == null) return true;
+        return record.EnrichmentStatus == 1 || record.EnrichmentStatus == 4 || IsRecordLocked(record);
     }
 
     private string GetStatusClass(int status)
@@ -1427,8 +1558,8 @@
     {
         if (_selectedGuids.Count == 0 || _isEnrichingAll) return;
         
-        // Exclude tracks that are locked
-        var toEnrich = _audioRecords.Where(r => _selectedGuids.Contains(r.GUID) && !IsRecordLocked(r)).ToList();
+        // Exclude tracks that are already fully enriched, manual, or locked
+        var toEnrich = _audioRecords.Where(r => _selectedGuids.Contains(r.GUID) && !IsEnrichmentDisabled(r)).ToList();
         if (toEnrich.Count == 0) return;
 
         _isEnrichingAll = true;
@@ -1454,6 +1585,46 @@
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Selected enrichment failed: {ex.Message}");
+        }
+        finally
+        {
+            _isEnrichingAll = false;
+            _selectedGuids.Clear();
+            StateHasChanged();
+        }
+    }
+
+    private async Task DeEnrichSelectedAsync()
+    {
+        if (_selectedGuids.Count == 0 || _isEnrichingAll) return;
+
+        // Restore original data for enriched/modified tracks (EnrichmentStatus != 0) that are not locked
+        var toDeEnrich = _audioRecords.Where(r => _selectedGuids.Contains(r.GUID) && r.EnrichmentStatus != 0 && !IsRecordLocked(r)).ToList();
+        if (toDeEnrich.Count == 0) return;
+
+        _isEnrichingAll = true;
+        _globalProgress = 0;
+        int current = 0;
+        int total = toDeEnrich.Count;
+
+        _isSelectionMode = false; // Turn off selection mode while processing
+
+        try
+        {
+            foreach (var record in toDeEnrich)
+            {
+                current++;
+                _globalProgressMessage = $"Restoring: {record.Title}";
+                _globalProgress = (double)current / total;
+                StateHasChanged();
+
+                await EnrichmentService.RestoreAudioAsync(record);
+            }
+            await LoadAudioRecordsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Selected de-enrichment failed: {ex.Message}");
         }
         finally
         {

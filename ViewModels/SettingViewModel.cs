@@ -72,6 +72,14 @@ namespace Autonomuse.ViewModels
         private bool _isCheckingAppUpdate;
         public bool IsCheckingAppUpdate { get => _isCheckingAppUpdate; set { _isCheckingAppUpdate = value; OnPropertyChanged(); } }
 
+        private bool _isAppUpdateAvailable;
+        private string _availableAppVersion = string.Empty;
+        private bool _hasCheckedAppUpdate;
+
+        public bool IsAppUpdateAvailable { get => _isAppUpdateAvailable; set { _isAppUpdateAvailable = value; OnPropertyChanged(); } }
+        public string AvailableAppVersion { get => _availableAppVersion; set { _availableAppVersion = value; OnPropertyChanged(); } }
+        public bool HasCheckedAppUpdate { get => _hasCheckedAppUpdate; set { _hasCheckedAppUpdate = value; OnPropertyChanged(); } }
+
         public HomeUISettings UiSettings
         {
             get => _uiSettings;
@@ -366,6 +374,18 @@ namespace Autonomuse.ViewModels
             {
                 // Ignore background errors
             }
+
+            try
+            {
+                var updateVersion = await UpdateService.GetAvailableUpdateAsync();
+                IsAppUpdateAvailable = !string.IsNullOrEmpty(updateVersion);
+                AvailableAppVersion = updateVersion ?? string.Empty;
+                HasCheckedAppUpdate = true;
+            }
+            catch
+            {
+                // Ignore background errors
+            }
         }
 
         public async Task CheckForAppUpdateAsync()
@@ -375,6 +395,11 @@ namespace Autonomuse.ViewModels
             ToolStatusMessage = string.Empty;
             try
             {
+                var updateVersion = await UpdateService.GetAvailableUpdateAsync();
+                IsAppUpdateAvailable = !string.IsNullOrEmpty(updateVersion);
+                AvailableAppVersion = updateVersion ?? string.Empty;
+                HasCheckedAppUpdate = true;
+
                 await UpdateService.CheckForUpdateAsync(isManual: true);
             }
             catch (Exception ex)

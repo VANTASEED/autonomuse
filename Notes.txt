@@ -4,3 +4,6 @@ future possibility :
 
 dev notes :
 all intended 1.0.0 features has been developed at this points.
+
+fixing v1.1 :
+- [x] select all function based on filtered result. At the moments it select all items regardless of the filters. (FIXED)

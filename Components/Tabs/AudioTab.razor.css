@@ -1276,13 +1276,55 @@
     padding-bottom: 0.8rem;
 }
 
-.modal-header h3 {
+.modal-tab-pills {
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 3px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-tab-btn {
+    background: transparent;
+    border: none;
+    color: #999;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modal-tab-btn:hover {
+    color: #fff;
+}
+
+.modal-tab-btn.active {
+    background: var(--accent-base, #3b82f6);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.original-empty-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    color: #aaa;
+    gap: 0.8rem;
+}
+
+.original-empty-banner p {
     margin: 0;
-    color: var(--accent-base);
-    font-size: 1.2rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 0.85rem;
+    line-height: 1.4;
 }
 
 .close-btn {

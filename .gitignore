@@ -424,3 +424,4 @@ FodyWeavers.xsd
 
 # Inno Setup files
 *_Setup.exe
+RELEASE_NOTES.md

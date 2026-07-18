@@ -170,11 +170,17 @@
                             <span class="tool-name">Autono<span class="blue-mu">μ'</span>se Update</span>
                             <div class="tool-meta">
                                 <span class="tool-version">Version: @ViewModel.CurrentAppVersion</span>
+                                @if (ViewModel.HasCheckedAppUpdate)
+                                {
+                                    <span class="tool-badge @(ViewModel.IsAppUpdateAvailable ? "outdated" : "ready")">
+                                        @(ViewModel.IsAppUpdateAvailable ? "Out of Date" : "Up to date")
+                                    </span>
+                                }
                             </div>
                         </div>
-                        <button class="pill-button accent" disabled="@(ViewModel.IsCheckingAppUpdate)"
+                        <button class="pill-button @(ViewModel.IsAppUpdateAvailable ? "accent" : "")" disabled="@(ViewModel.IsCheckingAppUpdate)"
                                 @onclick="ViewModel.CheckForAppUpdateAsync">
-                            @(ViewModel.IsCheckingAppUpdate ? "Checking..." : "Check for Updates")
+                            @(ViewModel.IsCheckingAppUpdate ? "Checking..." : ViewModel.IsAppUpdateAvailable ? "Update" : "Check for Updates")
                         </button>
                     </div>
 

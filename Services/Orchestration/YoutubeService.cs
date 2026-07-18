@@ -336,6 +336,10 @@ namespace Autonomuse.Services.Orchestration
                     record.Fingerprint = await _audioService.GenerateFingerprintAsync(record.FilePath);
 
                     await _audioService.AddAudioRecordAsync(record);
+                    
+                    // Overwrite default widescreen embedded thumbnail with the cropped square version
+                    await _audioService.UpdatePhysicalTagsAsync(record);
+                    
                     successCount++;
                     if (!string.IsNullOrEmpty(playlistGuid))
                         await _audioService.AddToPlaylistAsync(playlistGuid, record.GUID);

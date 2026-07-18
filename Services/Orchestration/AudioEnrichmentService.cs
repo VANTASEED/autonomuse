@@ -42,10 +42,10 @@ namespace Autonomuse.Services.Orchestration
 
         public async Task<(bool Success, string Message)> EnrichAudioAsync(AudioRecord record)
         {
-            if (record.EnrichmentStatus == 3 || record.EnrichmentStatus >= 10)
+            if (record.EnrichmentStatus == 1 || record.EnrichmentStatus == 3 || record.EnrichmentStatus >= 10 || record.EnrichmentStatus == 4)
             {
-                _logger.LogInformation("Enrichment is disabled/locked for audio: {Title} ({GUID}). Bypassing.", record.Title, record.GUID);
-                return (true, "Enrichment disabled/locked for this track. Bypassed.");
+                _logger.LogInformation("Enrichment is bypassed/locked/manual for audio: {Title} ({GUID}). Bypassing.", record.Title, record.GUID);
+                return (true, "Enrichment bypassed (already fully enriched, manual, or locked).");
             }
 
             try
@@ -205,9 +205,9 @@ namespace Autonomuse.Services.Orchestration
 
             foreach (var audio in allAudio)
             {
-                if (audio.EnrichmentStatus == 1 || audio.EnrichmentStatus == 2 || audio.EnrichmentStatus == 3 || audio.EnrichmentStatus >= 10 || audio.EnrichmentStatus == 4)
+                if (audio.EnrichmentStatus == 1 || audio.EnrichmentStatus == 3 || audio.EnrichmentStatus >= 10 || audio.EnrichmentStatus == 4)
                 {
-                    total--; // Skip enriched, manual, or disabled/locked in batch
+                    total--; // Skip fully enriched, manual, or disabled/locked in batch sweep
                     continue;
                 }
 
@@ -397,80 +397,34 @@ namespace Autonomuse.Services.Orchestration
         {
             try
             {
-                // Get sterilization tags
-                var tagsStr = await _settingsService.GetSettingAsync("StringSterilization");
-                var tags = tagsStr?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+                // STRICT RULE: Only enrich from Apple Music if MusicBrainz provided a direct Apple Music ID relation.
+                // Raw text searching is completely bypassed to prevent incorrect metadata matching.
+                if (string.IsNullOrEmpty(meta.AppleMusicId))
+                {
+                    _logger.LogInformation("No direct Apple Music ID found in MusicBrainz for {Title}. Skipping Apple Music enrichment.", record.Title);
+                    return false;
+                }
 
-                var searchTitle = FilePathSanitizer.SterilizeTitle(meta.Title ?? record.Title, tags);
-                var searchArtist = meta.Artist ?? record.Artist;
-
-                AppleMusicResult? result = null;
+                _logger.LogInformation("Attempting direct Apple Music lookup for MB-provided ID: {Id}", meta.AppleMusicId);
+                var result = await LookupAppleMusicByIdAsync(meta.AppleMusicId);
                 
-                // Priority: Use Direct ID from MusicBrainz if available
-                if (!string.IsNullOrEmpty(meta.AppleMusicId))
-                {
-                    _logger.LogInformation("Attempting direct Apple Music lookup for ID: {Id}", meta.AppleMusicId);
-                    var idResult = await LookupAppleMusicByIdAsync(meta.AppleMusicId);
-                    
-                    if (idResult != null)
-                    {
-                        // Store artwork from the direct ID match immediately
-                        if (!string.IsNullOrEmpty(idResult.ArtworkUrl))
-                        {
-                            meta.AppleMusicArtworkUrl = await GetHighResArtworkUrlAsync(idResult.ArtworkUrl);
-                            _logger.LogInformation("Preserved direct Apple Music artwork for ID: {Id}", meta.AppleMusicId);
-                        }
-
-                        // If it has track data, use it as our primary result
-                        if (!string.IsNullOrEmpty(idResult.TrackName))
-                        {
-                            result = idResult;
-                        }
-                        else
-                        {
-                            _logger.LogInformation("ID {Id} returned no track data (likely an album ID). Proceeding to search for title.", meta.AppleMusicId);
-                        }
-                    }
-                }
-
-                // Search Step: If no direct track result found, or ID lookup failed entirely
-                if (result == null)
-                {
-                    _logger.LogInformation("Attempting Apple Music search for: {Title} {Artist}", searchTitle, searchArtist);
-                    result = await SearchAppleMusicAsync(searchTitle, searchArtist);
-                    
-                    if (result == null)
-                    {
-                        var cleanTitle = System.Text.RegularExpressions.Regex.Replace(searchTitle, @"[^a-zA-Z0-9\s]", " ");
-                        var cleanArtist = !string.IsNullOrEmpty(searchArtist) 
-                            ? System.Text.RegularExpressions.Regex.Replace(searchArtist, @"[^a-zA-Z0-9\s]", " ") 
-                            : "";
-                        
-                        if (!string.IsNullOrWhiteSpace(cleanTitle))
-                        {
-                            _logger.LogInformation("Attempting fallback Apple Music search for: {Title} {Artist}", cleanTitle, cleanArtist);
-                            result = await SearchAppleMusicAsync(cleanTitle, cleanArtist);
-                        }
-                    }
-                }
-
                 if (result != null)
                 {
-                    _logger.LogInformation("Apple Music translation found for {Title}: {NewTitle} by {NewArtist}", 
-                        meta.Title, result.TrackName, result.ArtistName);
+                    _logger.LogInformation("Direct Apple Music translation found for {Title}: {NewTitle} by {NewArtist}", 
+                        meta.Title, result.TrackName ?? meta.Title, result.ArtistName ?? meta.Artist);
                     
-                    // Update Translation
+                    // Update Translation / Metadata
                     if (!string.IsNullOrEmpty(result.TrackName)) meta.Title = result.TrackName;
                     if (!string.IsNullOrEmpty(result.ArtistName)) meta.Artist = result.ArtistName;
                     if (!string.IsNullOrEmpty(result.PrimaryGenreName)) meta.Genre = result.PrimaryGenreName;
 
-                    // Update Artwork if we don't already have one from a direct ID match
-                    if (string.IsNullOrEmpty(meta.AppleMusicArtworkUrl) && !string.IsNullOrEmpty(result.ArtworkUrl))
+                    // Update Artwork
+                    if (!string.IsNullOrEmpty(result.ArtworkUrl))
                     {
                         meta.AppleMusicArtworkUrl = await GetHighResArtworkUrlAsync(result.ArtworkUrl);
                     }
                     
-                    // Final check: if we still have a Release ID (meaning no MB art yet), download now
+                    // Download Apple Music cover if Cover Art Archive (ReleaseId) is missing/empty
                     if (!string.IsNullOrEmpty(meta.AppleMusicArtworkUrl) && string.IsNullOrEmpty(meta.ReleaseId))
                     {
                         await DownloadAppleMusicCoverAsync(record, meta.AppleMusicArtworkUrl);
@@ -480,7 +434,7 @@ namespace Autonomuse.Services.Orchestration
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Apple Music translation failed: {Error}", ex.Message);
+                _logger.LogWarning("Apple Music direct lookup failed for ID {Id}: {Error}", meta.AppleMusicId, ex.Message);
             }
             return false;
         }
@@ -523,7 +477,6 @@ namespace Autonomuse.Services.Orchestration
             }
         }
 
-
         private async Task<string> GetHighResArtworkUrlAsync(string baseUrl)
         {
             var quality = await _settingsService.GetSettingAsync("CoverArtQuality") ?? "standard";
@@ -544,23 +497,6 @@ namespace Autonomuse.Services.Orchestration
                 return response?.Results?.FirstOrDefault();
             }
             catch { return null; }
-        }
-
-        private async Task<AppleMusicResult?> SearchAppleMusicAsync(string title, string? artist)
-        {
-            try
-            {
-                var query = string.IsNullOrEmpty(artist) ? title : $"{title} {artist}";
-                var term = Uri.EscapeDataString(query);
-                var url = $"https://itunes.apple.com/search?term={term}&country=US&media=music&entity=song&limit=1";
-
-                var response = await _httpClient.GetFromJsonAsync<AppleMusicResponse>(url);
-                return response?.Results?.FirstOrDefault();
-            }
-            catch
-            {
-                return null;
-            }
         }
 
 

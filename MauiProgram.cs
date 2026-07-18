@@ -70,8 +70,7 @@ namespace Autonomuse
             builder.Services.AddScoped<Autonomuse.ViewModels.StartViewModel>();
             builder.Services.AddScoped<Autonomuse.ViewModels.SettingViewModel>();
             builder.Services.AddScoped<Autonomuse.ViewModels.DashboardViewModel>();
-
-builder.Services.AddBlazorWebViewDeveloperTools();
+            builder.Services.AddBlazorWebViewDeveloperTools();
 
             return builder.Build();
         }
