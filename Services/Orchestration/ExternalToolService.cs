@@ -94,7 +94,7 @@ namespace Autonomuse.Services.Orchestration
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = path,
-                    Arguments = toolName.Equals("fpcalc", StringComparison.OrdinalIgnoreCase) ? "-version" : "--version",
+                    Arguments = toolName is "fpcalc" or "ffmpeg" ? "-version" : "--version",
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
                     CreateNoWindow = true

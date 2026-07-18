@@ -53,6 +53,19 @@
             }
         </div>
 
+        <div class="glass-card full-width">
+            <h2 class="card-title">AcoustID API Key</h2>
+            <div class="setting-item">
+                <p class="setting-desc">
+                    Audio enrichment uses AcoustID for audio fingerprint-based track lookup. <br />To get your own API key,
+                    sign in at <a href="https://acoustid.org/" target="_blank">acoustid.org</a> (Google or other login options),
+                    then visit the <a href="https://acoustid.org/new-application" target="_blank">New Application</a> page,
+                    fill out the form, and paste the generated key below. <br />Leave this field empty to use the built-in shared key. Shared key traffic may be rate-limited.
+                </p>
+                <input type="text" class="api-key-input" placeholder="Leave empty to use shared key" @bind="ViewModel.AcoustIdApiKey" @bind:event="oninput" />
+            </div>
+        </div>
+
         @if (ViewModel.IsDebugMode)
         {
             <div class="glass-card full-width">
@@ -124,10 +137,10 @@
         </div>
 
         <div class="glass-card full-width">
-            <h2 class="card-title">Development Tools & Updates</h2>
+            <h2 class="card-title">Updates</h2>
             <div class="setting-item">
-                <p class="setting-desc">Required tools to run background downloads and audio fingerprinting. Updates are performed silently via winget.</p>
-                
+                <p class="setting-desc">Keep Autono<span class="blue-mu">μ'</span>se and its background utility tools up to date. Background tools are updated via winget, while application updates are fetched directly from GitHub.</p>
+
                 @if (!string.IsNullOrEmpty(ViewModel.ToolStatusMessage))
                 {
                     <div class="tool-update-status @(ViewModel.ToolStatusMessage.StartsWith("SUCCESS:") ? "success" : ViewModel.ToolStatusMessage.StartsWith("ERROR:") ? "error" : "info")">
@@ -151,6 +164,22 @@
                 }
 
                 <div class="tools-list">
+                    <!-- Autonoμ'se Update -->
+                    <div class="tool-row">
+                        <div class="tool-info">
+                            <span class="tool-name">Autono<span class="blue-mu">μ'</span>se Update</span>
+                            <div class="tool-meta">
+                                <span class="tool-version">Version: @ViewModel.CurrentAppVersion</span>
+                            </div>
+                        </div>
+                        <button class="pill-button accent" disabled="@(ViewModel.IsCheckingAppUpdate)"
+                                @onclick="ViewModel.CheckForAppUpdateAsync">
+                            @(ViewModel.IsCheckingAppUpdate ? "Checking..." : "Check for Updates")
+                        </button>
+                    </div>
+
+                    <div class="tool-separator"></div>
+
                     <!-- yt-dlp -->
                     <div class="tool-row">
                         <div class="tool-info">
@@ -158,7 +187,7 @@
                             <div class="tool-meta">
                                 <span class="tool-version">Version: @ViewModel.YtDlpVersion</span>
                                 <span class="tool-badge @(!ViewModel.IsYtDlpReady ? "missing" : ViewModel.IsYtDlpOutdated ? "outdated" : "ready")">
-                                    @(!ViewModel.IsYtDlpReady ? "Not Installed" : ViewModel.IsYtDlpOutdated ? "Out of Date" : "Ready")
+                                    @(!ViewModel.IsYtDlpReady ? "Not Installed" : ViewModel.IsYtDlpOutdated ? "Out of Date" : "Up to date")
                                 </span>
                             </div>
                         </div>
@@ -176,7 +205,7 @@
                             <div class="tool-meta">
                                 <span class="tool-version">Version: @ViewModel.ChromaprintVersion</span>
                                 <span class="tool-badge @(!ViewModel.IsFpCalcReady ? "missing" : ViewModel.IsFpCalcOutdated ? "outdated" : "ready")">
-                                    @(!ViewModel.IsFpCalcReady ? "Not Installed" : ViewModel.IsFpCalcOutdated ? "Out of Date" : "Ready")
+                                    @(!ViewModel.IsFpCalcReady ? "Not Installed" : ViewModel.IsFpCalcOutdated ? "Out of Date" : "Up to date")
                                 </span>
                             </div>
                         </div>
@@ -184,6 +213,24 @@
                                 disabled="@(ViewModel.IsUpdatingTools || ViewModel.IsCheckingForUpdates)"
                                 @onclick='() => !ViewModel.IsFpCalcReady || ViewModel.IsFpCalcOutdated ? ViewModel.UpdateToolAsync("fpcalc") : ViewModel.ReCheckToolAsync("fpcalc")'>
                             @(ViewModel.UpdatingToolName == "fpcalc" ? "Updating..." : ViewModel.CheckingToolName == "fpcalc" ? "Checking..." : !ViewModel.IsFpCalcReady ? "Install" : ViewModel.IsFpCalcOutdated ? "Update" : "Re-check")
+                        </button>
+                    </div>
+
+                    <!-- FFmpeg -->
+                    <div class="tool-row">
+                        <div class="tool-info">
+                            <span class="tool-name">FFmpeg</span>
+                            <div class="tool-meta">
+                                <span class="tool-version">Version: @ViewModel.FfmpegVersion</span>
+                                <span class="tool-badge @(!ViewModel.IsFfmpegReady ? "missing" : ViewModel.IsFfmpegOutdated ? "outdated" : "ready")">
+                                    @(!ViewModel.IsFfmpegReady ? "Not Installed" : ViewModel.IsFfmpegOutdated ? "Out of Date" : "Up to date")
+                                </span>
+                            </div>
+                        </div>
+                        <button class="pill-button @(!ViewModel.IsFfmpegReady || ViewModel.IsFfmpegOutdated ? "accent" : "")" 
+                                disabled="@(ViewModel.IsUpdatingTools || ViewModel.IsCheckingForUpdates)"
+                                @onclick='() => !ViewModel.IsFfmpegReady || ViewModel.IsFfmpegOutdated ? ViewModel.UpdateToolAsync("ffmpeg") : ViewModel.ReCheckToolAsync("ffmpeg")'>
+                            @(ViewModel.UpdatingToolName == "ffmpeg" ? "Updating..." : ViewModel.CheckingToolName == "ffmpeg" ? "Checking..." : !ViewModel.IsFfmpegReady ? "Install" : ViewModel.IsFfmpegOutdated ? "Update" : "Re-check")
                         </button>
                     </div>
                 </div>

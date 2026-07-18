@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Autonomuse.Shared.Contracts;
 using Autonomuse.Shared.DTOs;
 using Autonomuse.Shared.Enums;
@@ -282,6 +283,23 @@ namespace Autonomuse.ViewModels
         public string AcceptedExtensions => SelectedMediaType != MediaType.None && ExtensionMap.ContainsKey(SelectedMediaType)
             ? string.Join(",", ExtensionMap[SelectedMediaType])
             : "";
+
+        public static string Version { get; } = LoadVersion();
+
+        private static string LoadVersion()
+        {
+            try
+            {
+                var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+                var json = File.ReadAllText(path);
+                using var doc = JsonDocument.Parse(json);
+                return doc.RootElement.GetProperty("Version").GetString() ?? "unknown";
+            }
+            catch
+            {
+                return "unknown";
+            }
+        }
 
         #endregion
 

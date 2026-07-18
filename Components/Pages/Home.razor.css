@@ -42,6 +42,7 @@
     z-index: 10;
     flex-shrink: 0;
     position: relative;
+    box-sizing: border-box;
 }
 
 .left-bg-overlay {
@@ -198,4 +199,35 @@
     background-color: #333;
     height: 1px;
     margin: 20px;
+}
+
+.backstage-link-container {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    text-align: center;
+}
+
+.backstage-link {
+    font-size: 0.7rem;
+    color: var(--general-text);
+    opacity: 0.45;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    padding: 4px 14px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.backstage-link:hover,
+.backstage-link.active {
+    opacity: 0.9;
+    color: var(--accent-base);
+    border-color: var(--accent-base);
+    background: rgba(var(--accent-base-rgb), 0.08);
 }

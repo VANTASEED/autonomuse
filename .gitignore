@@ -421,3 +421,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Inno Setup files
+*_Setup.exe

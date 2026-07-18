@@ -8,7 +8,7 @@
         await ViewModel.InitializeAsync();
         
         // Auto-redirect if everything is already setup
-        if (ViewModel.IsYtDlpReady && ViewModel.IsFpCalcReady && !string.IsNullOrEmpty(ViewModel.LibraryPath))
+        if (ViewModel.IsYtDlpReady && ViewModel.IsFfmpegReady && ViewModel.IsFpCalcReady && !string.IsNullOrEmpty(ViewModel.LibraryPath))
         {
             await ViewModel.CompleteOnBoardingAsync();
         }
@@ -50,7 +50,7 @@
                 <div class="step-item @(ViewModel.IsYtDlpReady ? "completed" : "")">
                     <div class="step-indicator">2</div>
                     <div class="step-info">
-                        <span class="step-title">YouTube Extraction Tool</span>
+                        <span class="step-title">YouTube Ingestion Pipeline</span>
                         <span class="step-status">@(ViewModel.IsYtDlpReady ? "yt-dlp is ready." : "Required for downloading from YouTube.")</span>
                     </div>
                     
@@ -66,12 +66,32 @@
                     }
                 </div>
 
-                <!-- Step 3: Tool Check (fpcalc) -->
-                <div class="step-item @(ViewModel.IsFpCalcReady ? "completed" : "")">
+                <!-- Step 3: Tool Check (ffmpeg) -->
+                <div class="step-item @(ViewModel.IsFfmpegReady ? "completed" : "")">
                     <div class="step-indicator">3</div>
                     <div class="step-info">
+                        <span class="step-title">FFmpeg</span>
+                        <span class="step-status">@(ViewModel.IsFfmpegReady ? "FFmpeg is ready." : "Required for media processing.")</span>
+                    </div>
+                    
+                    @if (!ViewModel.IsFfmpegReady)
+                    {
+                        <button class="step-action accent" @onclick="ViewModel.InstallFfmpegAsync" disabled="@ViewModel.IsDownloading">
+                            @(ViewModel.IsDownloading ? "Installing..." : "Install")
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="step-action completed" disabled>Installed</button>
+                    }
+                </div>
+
+                <!-- Step 4: Tool Check (fpcalc) -->
+                <div class="step-item @(ViewModel.IsFpCalcReady ? "completed" : "")">
+                    <div class="step-indicator">4</div>
+                    <div class="step-info">
                         <span class="step-title">Audio Fingerprinter</span>
-                        <span class="step-status">@(ViewModel.IsFpCalcReady ? "fpcalc is ready." : "Required for metadata enrichment.")</span>
+                        <span class="step-status">@(ViewModel.IsFpCalcReady ? "Chromaprint is ready." : "Required for metadata enrichment.")</span>
                     </div>
                     
                     @if (!ViewModel.IsFpCalcReady)
@@ -99,7 +119,7 @@
 
             <div class="onboarding-footer">
                 <button class="next-button" 
-                        disabled="@(!ViewModel.IsYtDlpReady || !ViewModel.IsFpCalcReady || string.IsNullOrEmpty(ViewModel.LibraryPath) || ViewModel.IsDownloading)"
+                        disabled="@(!ViewModel.IsYtDlpReady || !ViewModel.IsFfmpegReady || !ViewModel.IsFpCalcReady || string.IsNullOrEmpty(ViewModel.LibraryPath) || ViewModel.IsDownloading)"
                         @onclick="ViewModel.CompleteOnBoardingAsync">
                     Let's Start
                 </button>

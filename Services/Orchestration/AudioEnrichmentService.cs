@@ -17,8 +17,8 @@ namespace Autonomuse.Services.Orchestration
         private readonly HttpClient _httpClient;
         private readonly ILogger<AudioEnrichmentService> _logger;
 
-        private const string AcoustIdApiKey = "2q6JP7xq7S";
-        private const string UserAgent = "Autonomuse/1.0.0 ( flesi.arnoldi@outlook.com )";
+        private const string AcoustIdApiKey = "2q6JP7xq7S"; //shared key
+        private const string UserAgent = "Autonomuse/1.0.0 ( vantaseed@gmail.com )";
         
         // MusicBrainz rate limit is 1 request per second
         private static readonly SemaphoreSlim MusicBrainzSemaphore = new(1, 1);
@@ -219,9 +219,11 @@ namespace Autonomuse.Services.Orchestration
 
         private async Task<string?> GetMusicBrainzIdAsync(string fingerprint, double duration)
         {
+            var userKey = await _settingsService.GetSettingAsync("AcoustIdApiKey");
+            var key = string.IsNullOrEmpty(userKey) ? AcoustIdApiKey : userKey;
             return await RetryAsync(async () =>
             {
-                var url = $"https://api.acoustid.org/v2/lookup?client={AcoustIdApiKey}&duration={(int)Math.Round(duration)}&fingerprint={fingerprint}&meta=recordingids";
+                var url = $"https://api.acoustid.org/v2/lookup?client={key}&duration={(int)Math.Round(duration)}&fingerprint={fingerprint}&meta=recordingids";
                 var response = await _httpClient.GetFromJsonAsync<AcoustIdResponse>(url);
 
                 return response?.Results?

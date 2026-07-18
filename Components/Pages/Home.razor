@@ -58,6 +58,11 @@
             <button class="menubutton @(ActiveTab == TabType.Settings ? "active" : "")" 
                     @onclick="() => SetTab(TabType.Settings)">Settings</button>
         </div>
+        
+        <div class="backstage-link-container">
+            <button class="backstage-link @(ActiveTab == TabType.Backstage ? "active" : "")" 
+                    @onclick="() => SetTab(TabType.Backstage)">backstage</button>
+        </div>
     </div>
     
     <div class="right-container">
@@ -79,6 +84,9 @@
                 case TabType.Settings:
                     <SettingTab OnSettingsChanged="OnSettingsChanged" />
                     break;
+                case TabType.Backstage:
+                    <BackstageTab />
+                    break;
             }
         </div>
     </div>
@@ -90,7 +98,8 @@
         Dashboard,
         Audio,
         Video,
-        Settings
+        Settings,
+        Backstage
     }
 
     private TabType ActiveTab { get; set; } = TabType.Dashboard;

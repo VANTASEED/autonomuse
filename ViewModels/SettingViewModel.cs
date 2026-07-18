@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Autonomuse.Shared.Contracts;
 using Autonomuse.Shared.DTOs;
+using Autonomuse.Services;
 using Autonomuse.Services.Orchestration;
 using Autonomuse.Infrastructure.Data;
 using Autonomuse.Components;
@@ -29,6 +30,7 @@ namespace Autonomuse.ViewModels
         private string _sterilizationInput = string.Empty;
         private ObservableCollection<string> _sterilizationTags = new();
         private string _coverArtQuality = "standard";
+        private string _acoustIdApiKey = string.Empty;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -66,6 +68,10 @@ namespace Autonomuse.ViewModels
         public string CheckingToolName { get => _checkingToolName; set { _checkingToolName = value; OnPropertyChanged(); OnPropertyChanged(nameof(IsCheckingForUpdates)); } }
         public bool IsCheckingForUpdates => !string.IsNullOrEmpty(CheckingToolName);
 
+        public string CurrentAppVersion => UpdateService.CurrentAppVersion;
+        private bool _isCheckingAppUpdate;
+        public bool IsCheckingAppUpdate { get => _isCheckingAppUpdate; set { _isCheckingAppUpdate = value; OnPropertyChanged(); } }
+
         public HomeUISettings UiSettings
         {
             get => _uiSettings;
@@ -100,6 +106,20 @@ namespace Autonomuse.ViewModels
                     _coverArtQuality = value;
                     OnPropertyChanged();
                     _ = _settingsService.SaveSettingAsync("CoverArtQuality", value);
+                }
+            }
+        }
+
+        public string AcoustIdApiKey
+        {
+            get => _acoustIdApiKey;
+            set
+            {
+                if (_acoustIdApiKey != value)
+                {
+                    _acoustIdApiKey = value;
+                    OnPropertyChanged();
+                    _ = _settingsService.SaveSettingAsync("AcoustIdApiKey", value);
                 }
             }
         }
@@ -199,6 +219,9 @@ namespace Autonomuse.ViewModels
             var quality = await _settingsService.GetSettingAsync("CoverArtQuality");
             _coverArtQuality = quality ?? "standard";
             OnPropertyChanged(nameof(CoverArtQuality));
+
+            _acoustIdApiKey = await _settingsService.GetSettingAsync("AcoustIdApiKey") ?? string.Empty;
+            OnPropertyChanged(nameof(AcoustIdApiKey));
 
             await RefreshToolsInfoAsync();
             _ = Task.Run(CheckForUpdatesAsync);
@@ -303,6 +326,11 @@ namespace Autonomuse.ViewModels
                     IsFpCalcOutdated = outdated.Contains("fpcalc");
                     isOutdated = IsFpCalcOutdated;
                 }
+                else if (toolName.Equals("ffmpeg", StringComparison.OrdinalIgnoreCase))
+                {
+                    IsFfmpegOutdated = outdated.Contains("ffmpeg");
+                    isOutdated = IsFfmpegOutdated;
+                }
 
                 if (isOutdated)
                 {
@@ -337,6 +365,25 @@ namespace Autonomuse.ViewModels
             catch
             {
                 // Ignore background errors
+            }
+        }
+
+        public async Task CheckForAppUpdateAsync()
+        {
+            if (IsCheckingAppUpdate) return;
+            IsCheckingAppUpdate = true;
+            ToolStatusMessage = string.Empty;
+            try
+            {
+                await UpdateService.CheckForUpdateAsync(isManual: true);
+            }
+            catch (Exception ex)
+            {
+                ToolStatusMessage = $"ERROR: {ex.Message}";
+            }
+            finally
+            {
+                IsCheckingAppUpdate = false;
             }
         }
 

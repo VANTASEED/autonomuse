@@ -1,15 +1,6 @@
-offline synchronize via USB :
-user can connect devices to USB (phone / DAP / external drive), read as file transfer mode.
-app can select a folder on that device, then synchronize the media files inside between desktop library and device folder library.
-
 future possibility :
-wireless synchronize by local network
+- wireless synchronize by local network
+- offline synchronize via USB. user can connect devices to USB (phone / DAP / external drive), read as file transfer mode. app can select a folder on that device, then synchronize the media files inside between desktop library and device folder library.
 
-
-must have feature :
-- about page!
-- versioning and updating to check on github release.
-- API for future development possibility.
- 
-fixing :
-- app icon!
+dev notes :
+all intended 1.0.0 features has been developed at this points.

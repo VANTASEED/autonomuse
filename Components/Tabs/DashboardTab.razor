@@ -1,6 +1,12 @@
+@using System.Text.Json
+@using System.Text.Json.Serialization
+@using System.Globalization
 @using Autonomuse.ViewModels
+@using Autonomuse.Shared.Contracts
 @using Microsoft.AspNetCore.Components.Forms
 @inject DashboardViewModel ViewModel
+@inject HttpClient Http
+@inject ISettingsService Settings
 
 <div class="tab-content">
     <div class="header">
@@ -225,21 +231,86 @@
                 </div>
             }
         </div>
+        @if (_notice != null)
+        {
+            <div class="notice-section notice-@_notice.Level">
+                <div class="notice-header">
+                    <span class="notice-icon">@GetLevelIcon(_notice.Level)</span>
+                    <span class="notice-title">@_notice.Title</span>
+                    <button class="notice-dismiss" @onclick="DismissNoticeAsync" title="Dismiss">×</button>
+                </div>
+                <div class="notice-body">@((MarkupString)_notice.HtmlMessage)</div>
+            </div>
+        }
+        <div class="version-info">version : @Autonomuse.ViewModels.DashboardViewModel.Version</div>
     </div>
 </div>
 
 @code {
+    private class NoticeData
+    {
+        [JsonPropertyName("noticeId")] public string NoticeId { get; set; } = "";
+        [JsonPropertyName("level")] public string Level { get; set; } = "";
+        [JsonPropertyName("title")] public string Title { get; set; } = "";
+        [JsonPropertyName("message")] public string Message { get; set; } = "";
+        [JsonPropertyName("expiration")] public string Expiration { get; set; } = "false";
+        [JsonIgnore] public string HtmlMessage { get; set; } = "";
+    }
+
     private bool _isOrgDropdownOpen;
 
     private string SelectedOrgName => string.IsNullOrEmpty(ViewModel.SelectedOrganizationGuid)
         ? $"No {ViewModel.OrganizationLabel.ToLower()}"
         : ViewModel.OrganizationOptions.FirstOrDefault(x => x.GUID == ViewModel.SelectedOrganizationGuid)?.Name ?? $"No {ViewModel.OrganizationLabel.ToLower()}";
 
+    private NoticeData? _notice;
+
     protected override async Task OnInitializedAsync()
     {
         ViewModel.PropertyChanged += (s, e) => InvokeAsync(StateHasChanged);
         await ViewModel.LoadOrganizationOptionsAsync();
+        await LoadNoticeAsync();
     }
+
+    private async Task LoadNoticeAsync()
+    {
+        try
+        {
+            var dismissedId = await Settings.GetSettingAsync("NoticeDismissedId") ?? "";
+            var json = await Http.GetStringAsync("https://gist.githubusercontent.com/VANTASEED/8f26ebbd528cd948fc62906f14809aff/raw");
+            var data = JsonSerializer.Deserialize<NoticeData>(json);
+            if (data == null) return;
+
+            if (data.NoticeId == dismissedId) return;
+
+            if (data.Expiration != "false"
+                && DateTime.TryParseExact(data.Expiration, "dd/MM/yy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var expires)
+                && DateTime.Now > expires)
+                return;
+
+            data.HtmlMessage = Markdig.Markdown.ToHtml(data.Message);
+            _notice = data;
+        }
+        catch
+        {
+            _notice = null;
+        }
+    }
+
+    private async Task DismissNoticeAsync()
+    {
+        if (_notice == null) return;
+        await Settings.SaveSettingAsync("NoticeDismissedId", _notice.NoticeId);
+        _notice = null;
+    }
+
+    private static string GetLevelIcon(string level) => level switch
+    {
+        "danger" => "\u26a0",
+        "warning" => "\u26a1",
+        "updates" => "\U0001f4e2",
+        _ => "\u2139"
+    };
 
     private void ToggleOrgDropdown() => _isOrgDropdownOpen = !_isOrgDropdownOpen;
 

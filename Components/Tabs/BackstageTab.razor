@@ -1,0 +1,115 @@
+@using Autonomuse.Shared.Contracts
+@inject IHomeUIService UIService
+
+<div class="tab-content">
+    <div class="header">
+        <h1>Backstage</h1>
+        <p>Behind the scenes of Autono<span class="blue-mu">μ'</span>se</p>
+    </div>
+
+    <div class="backstage-container glass-card">
+        <div class="logo-wrapper">
+            <img src="images/Assets/Autonomuse2.png" alt="Autonomuse Logo" class="app-logo" />
+            <span class="logo-tagline">Audio. Video. Autonomy.</span>
+        </div>
+        
+        <div class="backstage-content-wrapper">
+            <p class="backstage-desc">
+                Autono<span class="blue-mu">μ'</span>se (pronounced "Autonomuse") is a premium, local-first media preservation and enrichment tool developed by VANTASEED and built to grant users complete autonomy over organizing, enriching, and preserving their personal collections. Rather than locking you into rigid cloud ecosystems, Autono<span class="blue-mu">μ'</span>se provides powerful background ingestion pipelines, intelligent metadata enrichment, and advanced local cataloging tools that serve your creative control. By streamlining the tedious tasks of retrieving cover art, mapping playlists, and managing directories locally, Autono<span class="blue-mu">μ'</span>se ensures that you remain the absolute master of your library. All of this robust orchestration is wrapped in a highly customizable interface, allowing you to personalize the aesthetic to reflect your taste.
+            </p>
+            <div class="backstage-features">
+                <div class="feature-item">
+                    <span class="feature-icon">✦</span>
+                    <div class="feature-text">
+                        <strong>Unified Audio & Video Library</strong>
+                        <span>Catalog local music collections, audio playlists, and video directories in a single workspace.</span>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✦</span>
+                    <div class="feature-text">
+                        <strong>Metadata Enrichment & Portability</strong>
+                        <span>Enrich music tracks with high-quality cover art and tags from global databases, writing metadata directly to files to keep them portable and perfect in any player.</span>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✦</span>
+                    <div class="feature-text">
+                        <strong>Playlist Archiving & Sync</strong>
+                        <span>Safeguard favorite online audio and video tracks locally, maintaining seamless, automated synchronization with external playlists.</span>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">✦</span>
+                    <div class="feature-text">
+                        <strong>Sophisticated Personalization</strong>
+                        <span>Tailor the interface with dynamic accent colors, custom panel glassmorphism sliders, and text visual effects.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="github-profile-section">
+                <span class="github-profile-text">Explore more of my work and projects on GitHub:</span>
+                <a href="https://github.com/VANTASEED" target="_blank" class="github-btn">
+                    <span class="github-icon"></span>
+                    GitHub / VANTASEED Studio
+                </a>
+            </div>
+            
+            <div class="acknowledgements-section">
+                <h3 class="ack-title">Acknowledgements & Resources</h3>
+                <p class="ack-desc">Autono<span class="blue-mu">μ'</span>se stands on the shoulders of these incredible open-source tools, libraries, and metadata databases:</p>
+                <div class="ack-grid">
+                    <div class="ack-item">
+                        <strong>yt-dlp</strong>
+                        <span>Ingestion Pipeline</span>
+                        <a href="https://github.com/yt-dlp/yt-dlp" target="_blank" class="ack-link">GitHub Repository</a>
+                    </div>
+                    <div class="ack-item">
+                        <strong>MusicBrainz</strong>
+                        <span>Metadata Database</span>
+                        <a href="https://musicbrainz.org/" target="_blank" class="ack-link">Official Website</a>
+                    </div>
+                    <div class="ack-item">
+                        <strong>Cover Art Archive</strong>
+                        <span>Cover Art Database</span>
+                        <a href="https://coverartarchive.org/" target="_blank" class="ack-link">Official Website</a>
+                    </div>
+                    <div class="ack-item">
+                        <strong>Acoustid Chromaprint</strong>
+                        <span>Acoustic Fingerprinting</span>
+                        <a href="https://acoustid.org/" target="_blank" class="ack-link">Official Website</a>
+                    </div>
+                    <div class="ack-item">
+                        <strong>TagLib</strong>
+                        <span>Metadata Reader Library</span>
+                        <a href="https://github.com/mono/taglib-sharp" target="_blank" class="ack-link">GitHub Repository</a>
+                    </div>
+                    <div class="ack-item">
+                        <strong>Skia Graphics Library</strong>
+                        <span>Graphics & Rendering</span>
+                        <a href="https://github.com/mono/SkiaSharp" target="_blank" class="ack-link">GitHub Repository</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="studio-section">
+                <p class="studio-tagline">Powered by copious amounts of instant noodles, questionable caffeine tolerance, <br>and a stubborn refusal to go touch grass.</p>
+                <img src="@LogoUrl" alt="VANTASEED Studio" class="studio-logo" />
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private string LogoUrl { get; set; } = "images/Assets/VSLogo_White.png";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var settings = await UIService.GetSettingsAsync();
+        LogoUrl = settings.GeneralTextColor == "#000000"
+            ? "images/Assets/VSLogo_Black.png"
+            : "images/Assets/VSLogo_White.png";
+    }
+}

@@ -6,6 +6,30 @@ namespace Autonomuse
     {
         public static MauiApp CreateMauiApp()
         {
+#if WINDOWS
+            var wv2DataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Autonomuse", "WebView2");
+            if (!Directory.Exists(wv2DataFolder))
+            {
+                Directory.CreateDirectory(wv2DataFolder);
+            }
+            Environment.SetEnvironmentVariable("WEBVIEW2_USER_DATA_FOLDER", wv2DataFolder);
+#endif
+
+            try
+            {
+                return BuildApp();
+            }
+            catch (Exception ex)
+            {
+                File.WriteAllText(
+                    Path.Combine(Path.GetTempPath(), "autonomuse_error.log"),
+                    $"{DateTime.Now}: {ex}");
+                throw;
+            }
+        }
+
+        static MauiApp BuildApp()
+        {
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
@@ -47,10 +71,7 @@ namespace Autonomuse
             builder.Services.AddScoped<Autonomuse.ViewModels.SettingViewModel>();
             builder.Services.AddScoped<Autonomuse.ViewModels.DashboardViewModel>();
 
-#if DEBUG
-    		builder.Services.AddBlazorWebViewDeveloperTools();
-    		builder.Logging.AddDebug();
-#endif
+builder.Services.AddBlazorWebViewDeveloperTools();
 
             return builder.Build();
         }

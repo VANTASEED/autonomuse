@@ -14,6 +14,7 @@ namespace Autonomuse.ViewModels
         private string _libraryPath = string.Empty;
         private bool _isYtDlpReady = false;
         private bool _isFpCalcReady = false;
+        private bool _isFfmpegReady = false;
         private bool _isDownloading = false;
         private bool _isInitializing = true;
         private double _downloadProgress = 0;
@@ -43,6 +44,12 @@ namespace Autonomuse.ViewModels
         {
             get => _isFpCalcReady;
             set { _isFpCalcReady = value; OnPropertyChanged(); }
+        }
+
+        public bool IsFfmpegReady
+        {
+            get => _isFfmpegReady;
+            set { _isFfmpegReady = value; OnPropertyChanged(); }
         }
 
         public bool IsDownloading
@@ -85,19 +92,23 @@ namespace Autonomuse.ViewModels
         {
             IsYtDlpReady = await _toolService.IsToolInstalledAsync("yt-dlp");
             IsFpCalcReady = await _toolService.IsToolInstalledAsync("fpcalc");
+            IsFfmpegReady = await _toolService.IsToolInstalledAsync("ffmpeg");
             
-            if (!IsYtDlpReady && !IsFpCalcReady)
-                StatusMessage = "External tools (yt-dlp, fpcalc) are missing.";
+            if (!IsYtDlpReady && !IsFpCalcReady && !IsFfmpegReady)
+                StatusMessage = "External tools (yt-dlp, fpcalc, ffmpeg) are missing.";
             else if (!IsYtDlpReady)
                 StatusMessage = "YouTube Downloader (yt-dlp) is missing.";
             else if (!IsFpCalcReady)
                 StatusMessage = "Audio Fingerprinter (fpcalc) is missing.";
+            else if (!IsFfmpegReady)
+                StatusMessage = "FFmpeg is missing.";
             else
                 StatusMessage = "External tools are ready.";
         }
 
         public async Task InstallYtDlpAsync() => await InstallToolAsync("yt-dlp");
         public async Task InstallFpCalcAsync() => await InstallToolAsync("fpcalc");
+        public async Task InstallFfmpegAsync() => await InstallToolAsync("ffmpeg");
 
         private async Task InstallToolAsync(string toolName)
         {
@@ -116,6 +127,7 @@ namespace Autonomuse.ViewModels
                 
                 await Task.Delay(1000); 
                 if (toolName == "yt-dlp") IsYtDlpReady = await _toolService.IsToolInstalledAsync("yt-dlp");
+                else if (toolName == "ffmpeg") IsFfmpegReady = await _toolService.IsToolInstalledAsync("ffmpeg");
                 else IsFpCalcReady = await _toolService.IsToolInstalledAsync("fpcalc");
                 
                 if (await _toolService.IsToolInstalledAsync(toolName))
