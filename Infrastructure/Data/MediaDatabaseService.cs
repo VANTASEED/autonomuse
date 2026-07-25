@@ -43,6 +43,8 @@ namespace Autonomuse.Infrastructure.Data
                         [Title] TEXT NOT NULL,
                         [Extension] TEXT NOT NULL,
                         [AlternativeTitle] TEXT,
+                        [AlternativeArtist] TEXT,
+                        [IsOriginalNonEnglish] INTEGER NOT NULL DEFAULT 0,
                         [Source] TEXT NOT NULL,
                         [YoutubeID] TEXT,
                         [FilePath] TEXT NOT NULL,
@@ -59,7 +61,8 @@ namespace Autonomuse.Infrastructure.Data
                         [Fingerprint] TEXT,
                         [CreatedAt] DATETIME NOT NULL,
                         [UpdatedAt] DATETIME NOT NULL,
-                        [EnrichmentStatus] INTEGER NOT NULL DEFAULT 0
+                        [EnrichmentStatus] INTEGER NOT NULL DEFAULT 0,
+                        [FailedEnrich] INTEGER NOT NULL DEFAULT 0
                     );
 
                     CREATE TABLE IF NOT EXISTS AudioPlaylist (
@@ -100,6 +103,8 @@ namespace Autonomuse.Infrastructure.Data
                         [Title] TEXT NOT NULL,
                         [Extension] TEXT NOT NULL,
                         [AlternativeTitle] TEXT,
+                        [AlternativeArtist] TEXT,
+                        [IsOriginalNonEnglish] INTEGER NOT NULL DEFAULT 0,
                         [Source] TEXT NOT NULL,
                         [YoutubeID] TEXT,
                         [FilePath] TEXT NOT NULL,
@@ -249,6 +254,62 @@ namespace Autonomuse.Infrastructure.Data
                 {
                     _logger.LogDebug("Migration for LastStatus column skipped (likely already exists): {Error}", ex.Message);
                 }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE AudioRecord ADD COLUMN [AlternativeArtist] TEXT";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added AlternativeArtist column to AudioRecord table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for AlternativeArtist column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE AudioRecord ADD COLUMN [IsOriginalNonEnglish] INTEGER NOT NULL DEFAULT 0";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added IsOriginalNonEnglish column to AudioRecord table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for IsOriginalNonEnglish column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE VideoRecord ADD COLUMN [AlternativeArtist] TEXT";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added AlternativeArtist column to VideoRecord table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for AlternativeArtist column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE VideoRecord ADD COLUMN [IsOriginalNonEnglish] INTEGER NOT NULL DEFAULT 0";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added IsOriginalNonEnglish column to VideoRecord table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for IsOriginalNonEnglish column skipped (likely already exists): {Error}", ex.Message);
+                }
+                try
+                {
+                    var migrateCmd = connection.CreateCommand();
+                    migrateCmd.CommandText = "ALTER TABLE Audio ADD COLUMN [FailedEnrich] INTEGER NOT NULL DEFAULT 0";
+                    migrateCmd.ExecuteNonQuery();
+                    _logger.LogInformation("Added FailedEnrich column to Audio table.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("Migration for FailedEnrich column skipped (likely already exists): {Error}", ex.Message);
+                }
+
             }
             catch (Exception ex)
             {

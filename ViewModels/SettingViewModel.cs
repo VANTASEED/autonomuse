@@ -31,6 +31,8 @@ namespace Autonomuse.ViewModels
         private ObservableCollection<string> _sterilizationTags = new();
         private string _coverArtQuality = "standard";
         private string _acoustIdApiKey = string.Empty;
+        private string _preferredVideoQuality = "1080";
+        private string _preferredAudioQuality = "320";
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -128,6 +130,34 @@ namespace Autonomuse.ViewModels
                     _acoustIdApiKey = value;
                     OnPropertyChanged();
                     _ = _settingsService.SaveSettingAsync("AcoustIdApiKey", value);
+                }
+            }
+        }
+
+        public string PreferredVideoQuality
+        {
+            get => _preferredVideoQuality;
+            set
+            {
+                if (_preferredVideoQuality != value)
+                {
+                    _preferredVideoQuality = value;
+                    OnPropertyChanged();
+                    _ = _settingsService.SaveSettingAsync("PreferredVideoQuality", value);
+                }
+            }
+        }
+
+        public string PreferredAudioQuality
+        {
+            get => _preferredAudioQuality;
+            set
+            {
+                if (_preferredAudioQuality != value)
+                {
+                    _preferredAudioQuality = value;
+                    OnPropertyChanged();
+                    _ = _settingsService.SaveSettingAsync("PreferredAudioQuality", value);
                 }
             }
         }
@@ -230,6 +260,12 @@ namespace Autonomuse.ViewModels
 
             _acoustIdApiKey = await _settingsService.GetSettingAsync("AcoustIdApiKey") ?? string.Empty;
             OnPropertyChanged(nameof(AcoustIdApiKey));
+
+            _preferredVideoQuality = await _settingsService.GetSettingAsync("PreferredVideoQuality") ?? "1080";
+            OnPropertyChanged(nameof(PreferredVideoQuality));
+
+            _preferredAudioQuality = await _settingsService.GetSettingAsync("PreferredAudioQuality") ?? "320";
+            OnPropertyChanged(nameof(PreferredAudioQuality));
 
             await RefreshToolsInfoAsync();
             _ = Task.Run(CheckForUpdatesAsync);

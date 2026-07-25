@@ -1,8 +1,10 @@
 @page "/home"
 @using Autonomuse.Components.Tabs
 @using Autonomuse.Shared.Contracts
+@using Autonomuse.ViewModels
 @inject IHomeUIService UIService
 @inject ISettingsService SettingsService
+@inject IJSRuntime JS
 
 <style>
     :root {
@@ -34,6 +36,50 @@
         --bg-layer1: url('@Layer1Bg');
         --bg-layer2: url('@Layer2Bg');
     }
+
+    .changelog-modal {
+        width: 560px;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+    }
+    .changelog-body {
+        overflow-y: auto;
+        max-height: 60vh;
+        padding: 1rem 0;
+        line-height: 1.6;
+        font-size: 0.9rem;
+    }
+    .changelog-body h1 { font-size: 1.2rem; color: var(--accent-base); margin: 0 0 0.5rem; }
+    .changelog-body h2 { font-size: 1rem; color: var(--accent-base); margin: 1rem 0 0.25rem; }
+    .changelog-body ul { margin: 0.25rem 0; padding-left: 1.2rem; }
+    .changelog-body li { margin: 0.15rem 0; }
+    .changelog-body hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 0.75rem 0; }
+    .modal-backdrop {
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 2000;
+    }
+    .modal-card {
+        background: var(--card-bg, rgba(18,18,18,0.4));
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px; padding: 1.8rem;
+    }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem; }
+    .modal-header h3 { margin: 0; color: var(--accent-base); font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
+    .close-btn { background: transparent; border: none; color: #888; font-size: 1.5rem; cursor: pointer; padding: 0; line-height: 1; }
+    .close-btn:hover { color: #fff; }
+    .modal-footer { display: flex; justify-content: flex-end; padding-top: 1rem; }
+    .action-btn.gold {
+        background: linear-gradient(135deg, var(--accent-bright) 0%, var(--accent-dark) 100%);
+        color: var(--accent-text); border: none; padding: 10px 24px; border-radius: 50px;
+        font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+    }
+    .action-btn.gold:hover { filter: brightness(1.2); transform: translateY(-2px); }
+    .changelog-footer { padding-top: 1rem; }
+    .changelog-got-it { width: 100%; text-align: center; justify-content: center; }
 </style>
 
 <div class="home-container">
@@ -92,6 +138,23 @@
     </div>
 </div>
 
+@if (_showChangelog)
+{
+    <div class="modal-backdrop" @onclick="DismissChangelogAsync">
+        <div class="modal-card changelog-modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>What's New</h3>
+            </div>
+            <div class="modal-body changelog-body">
+                @((MarkupString)_changelogHtml)
+            </div>
+            <div class="modal-footer changelog-footer">
+                <button class="action-btn gold changelog-got-it" @onclick="DismissChangelogAsync">Got it</button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private enum TabType
     {
@@ -109,10 +172,55 @@
     private string Layer1Bg { get; set; } = string.Empty;
     private string Layer2Bg { get; set; } = string.Empty;
     private bool IsLayer1Active { get; set; } = true;
+    private bool _showChangelog;
+    private string _changelogHtml = "";
+
     protected override async Task OnInitializedAsync()
     {
         Settings = await UIService.GetSettingsAsync();
         Layer1Bg = await UIService.GetBackgroundAsBase64Async(ActiveTab.ToString());
+        await CheckChangelogAsync();
+    }
+
+    private async Task CheckChangelogAsync()
+    {
+        try
+        {
+        var currentVersion = DashboardViewModel.Version;
+        var lastSeen = await SettingsService.GetSettingAsync("LastSeenVersion");
+        if (lastSeen == currentVersion && lastSeen != null) return;
+
+            string text;
+            try
+            {
+                using var stream = await FileSystem.OpenAppPackageFileAsync("CHANGELOG.txt");
+                using var reader = new System.IO.StreamReader(stream);
+                text = await reader.ReadToEndAsync();
+            }
+            catch
+            {
+                var changelogPath = System.IO.Path.Combine(AppContext.BaseDirectory, "CHANGELOG.txt");
+                var dir = AppContext.BaseDirectory;
+                for (int i = 0; i < 6 && !System.IO.File.Exists(changelogPath); i++)
+                {
+                    dir = System.IO.Path.GetDirectoryName(dir);
+                    if (dir == null) break;
+                    changelogPath = System.IO.Path.Combine(dir, "CHANGELOG.txt");
+                }
+                if (!System.IO.File.Exists(changelogPath)) return;
+                text = await System.IO.File.ReadAllTextAsync(changelogPath);
+            }
+            _changelogHtml = Markdig.Markdown.ToHtml(text);
+            _showChangelog = true;
+        }
+        catch { }
+    }
+
+    private async Task DismissChangelogAsync()
+    {
+        _showChangelog = false;
+        await SettingsService.SaveSettingAsync("LastSeenVersion", DashboardViewModel.Version);
+        StateHasChanged();
     }
 
     private async Task SetTab(TabType tab)
@@ -121,6 +229,7 @@
         
         ActiveTab = tab;
         await UpdateBackground();
+        await JS.InvokeVoidAsync("window.scrollToTop");
     }
 
     private async Task OnSettingsChanged()

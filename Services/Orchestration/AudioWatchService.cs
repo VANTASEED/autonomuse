@@ -90,6 +90,16 @@ namespace Autonomuse.Services.Orchestration
                 .Where(x => x != null && !string.IsNullOrEmpty(x.id))
                 .ToList();
 
+            items = items.Where(x => 
+                x != null &&
+                !string.Equals(x.title, "[deleted video]", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(x.title, "[private video]", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(x.title, "[unavailable video]", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(x.title, "deleted video", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(x.title, "private video", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(x.title, "unavailable video", StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+
             if (items.Count == 0)
             {
                 await UpdateLastCheckedAsync(wp.GUID);
@@ -121,11 +131,26 @@ namespace Autonomuse.Services.Orchestration
                 }
             }
 
+            // Get the updated list of GUIDs in this playlist
+            var activeLocalItems = await audioService.GetAudioInPlaylistAsync(playlist.GUID);
+            var localItemGuids = activeLocalItems.Select(x => x.GUID).ToHashSet();
+
             var newItems = new List<YtDlpFlatItem>();
             foreach (var item in items)
             {
                 var exists = await audioService.GetAudioByYoutubeIDAsync(item!.id!);
-                if (exists == null) newItems.Add(item);
+                if (exists == null)
+                {
+                    newItems.Add(item);
+                }
+                else
+                {
+                    if (!localItemGuids.Contains(exists.GUID))
+                    {
+                        await audioService.AddToPlaylistAsync(playlist.GUID, exists.GUID);
+                        localItemGuids.Add(exists.GUID);
+                    }
+                }
             }
 
             if (newItems.Count == 0)
@@ -145,13 +170,68 @@ namespace Autonomuse.Services.Orchestration
                 try
                 {
                     var itemUrl = $"https://www.youtube.com/watch?v={item.id}";
-                    await youtubeService.DownloadAudioAsync(itemUrl, onProgress: null, manualPlaylistGuid: playlist.GUID);
-                    success++;
+                    var result = await youtubeService.DownloadAudioAsync(itemUrl, onProgress: null, manualPlaylistGuid: playlist.GUID);
+                    if (result.Error > 0)
+                    {
+                        // Check if the error is an unavailable / private / deleted video
+                        var isUnavailable = false;
+                        foreach (var failure in result.Failures)
+                        {
+                            var errMsg = failure.Error?.ToLowerInvariant() ?? "";
+                            if (errMsg.Contains("private") || 
+                                errMsg.Contains("deleted") || 
+                                errMsg.Contains("removed") || 
+                                errMsg.Contains("unavailable") || 
+                                errMsg.Contains("copyright") || 
+                                errMsg.Contains("claim") || 
+                                errMsg.Contains("blocked") || 
+                                errMsg.Contains("terminated") || 
+                                errMsg.Contains("not available") || 
+                                errMsg.Contains("no longer available"))
+                            {
+                                isUnavailable = true;
+                                break;
+                            }
+                        }
+
+                        if (isUnavailable)
+                        {
+                            _logger.LogInformation("Skipping unavailable/private video {Id} during watcher sync", item.id);
+                        }
+                        else
+                        {
+                            errors += result.Error;
+                        }
+                    }
+                    else
+                    {
+                        success += result.Success;
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning("Failed to download {Id}: {Ex}", item.id, ex.Message);
-                    errors++;
+                    
+                    var errMsg = ex.Message?.ToLowerInvariant() ?? "";
+                    var isUnavailable = errMsg.Contains("private") || 
+                                        errMsg.Contains("deleted") || 
+                                        errMsg.Contains("removed") || 
+                                        errMsg.Contains("unavailable") || 
+                                        errMsg.Contains("copyright") || 
+                                        errMsg.Contains("claim") || 
+                                        errMsg.Contains("blocked") || 
+                                        errMsg.Contains("terminated") || 
+                                        errMsg.Contains("not available") || 
+                                        errMsg.Contains("no longer available");
+                    
+                    if (!isUnavailable)
+                    {
+                        errors++;
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Skipping unavailable/private video {Id} during watcher sync (exception caught)", item.id);
+                    }
                 }
             }
 

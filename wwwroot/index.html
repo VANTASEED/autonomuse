@@ -25,6 +25,25 @@
     </div>
 
     <script src="_framework/blazor.webview.js"></script>
+    <script>
+        window.scrollToTop = () => document.querySelector('.right-content').scrollTop = 0;
+        window.infiniteScroll = { observer: null };
+        window.setupInfiniteScroll = (sentinelId, dotNetRef) => {
+            window.teardownInfiniteScroll();
+            const el = document.getElementById(sentinelId);
+            if (!el) return;
+            window.infiniteScroll.observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting) dotNetRef.invokeMethodAsync('LoadMore');
+            }, { rootMargin: '400px' });
+            window.infiniteScroll.observer.observe(el);
+        };
+        window.teardownInfiniteScroll = () => {
+            if (window.infiniteScroll.observer) {
+                window.infiniteScroll.observer.disconnect();
+                window.infiniteScroll.observer = null;
+            }
+        };
+    </script>
 
 </body>
 

@@ -1,0 +1,15 @@
+v1.1.0
+---
+- Added quality selector for video and audio downloads
+- Added ability to delete playlists for both audio and video while retaining the tracks (tracks move to "No Playlist" unless associated with other playlists)
+- Added support for stopping/canceling ongoing YouTube downloads
+- Added handling for incomplete downloads (automatic cleanup of .part files)
+- Added original source title and artist name to the search filters for both audio and video
+- Added a "Failed" status dropdown filter for audio that is failed to be enriched.
+- Added infinite scroll loading, 50 track per load (batch selection still applies to unloaded tracks)
+- Added automatic scroll reset to the top when switching tabs
+- Added changelog popup interface to notify users of updates
+- Hidden private or deleted YouTube videos from list to prevent persistent sync errors
+- Fixed bug where existing library tracks were not added to new playlists when imported via folder watcher
+- Fixed metadata detail page where original/current text did not respect contrast text color setting
+- Partially fixed YouTube English metadata translation and non-English source tracking (caused by upstream yt-dlp language limitations, which still a problem for some unknown reason)

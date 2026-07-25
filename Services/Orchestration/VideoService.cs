@@ -106,13 +106,15 @@ namespace Autonomuse.Services.Orchestration
                 using var conn = new SqliteConnection(_mediaDb.GetConnectionString());
                 await conn.OpenAsync();
                 var cmd = conn.CreateCommand();
-                cmd.CommandText = @"INSERT INTO Video ([GUID],[FileName],[Title],[Extension],[AlternativeTitle],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt])
-                    VALUES (@g,@fn,@t,@ext,@at,@src,@yid,@fp,@genre,@artist,@dur,@res,@br,@sr,@ch,@year,@fs,@th,@ms,@ca,@ua)";
+                cmd.CommandText = @"INSERT INTO Video ([GUID],[FileName],[Title],[Extension],[AlternativeTitle],[AlternativeArtist],[IsOriginalNonEnglish],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt])
+                    VALUES (@g,@fn,@t,@ext,@at,@aa,@ine,@src,@yid,@fp,@genre,@artist,@dur,@res,@br,@sr,@ch,@year,@fs,@th,@ms,@ca,@ua)";
                 cmd.Parameters.AddWithValue("@g", record.GUID);
                 cmd.Parameters.AddWithValue("@fn", record.FileName);
                 cmd.Parameters.AddWithValue("@t", record.Title);
                 cmd.Parameters.AddWithValue("@ext", record.Extension);
                 cmd.Parameters.AddWithValue("@at", (object?)record.AlternativeTitle ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@aa", (object?)record.AlternativeArtist ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@ine", record.IsOriginalNonEnglish);
                 cmd.Parameters.AddWithValue("@src", record.Source);
                 cmd.Parameters.AddWithValue("@yid", (object?)record.YoutubeID ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@fp", record.FilePath);
@@ -144,7 +146,7 @@ namespace Autonomuse.Services.Orchestration
             using var conn = new SqliteConnection(_mediaDb.GetConnectionString());
             await conn.OpenAsync();
             var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT [GUID],[FileName],[Title],[Extension],[AlternativeTitle],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt] FROM Video ORDER BY [CreatedAt] DESC";
+            cmd.CommandText = "SELECT [GUID],[FileName],[Title],[Extension],[AlternativeTitle],[AlternativeArtist],[IsOriginalNonEnglish],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt] FROM Video ORDER BY [CreatedAt] DESC";
             using var r = await cmd.ExecuteReaderAsync();
             while (await r.ReadAsync())
             {
@@ -155,22 +157,24 @@ namespace Autonomuse.Services.Orchestration
                     Title = r.GetString(2),
                     Extension = r.GetString(3),
                     AlternativeTitle = r.IsDBNull(4) ? null : r.GetString(4),
-                    Source = r.GetString(5),
-                    YoutubeID = r.IsDBNull(6) ? null : r.GetString(6),
-                    FilePath = r.GetString(7),
-                    Genre = r.IsDBNull(8) ? null : r.GetString(8),
-                    Artist = r.IsDBNull(9) ? null : r.GetString(9),
-                    Duration = r.IsDBNull(10) ? null : r.GetDouble(10),
-                    Resolution = r.IsDBNull(11) ? null : r.GetString(11),
-                    Bitrate = r.IsDBNull(12) ? null : r.GetInt32(12),
-                    SampleRate = r.IsDBNull(13) ? null : r.GetInt32(13),
-                    Channels = r.IsDBNull(14) ? null : r.GetInt32(14),
-                    Year = r.IsDBNull(15) ? null : r.GetInt32(15),
-                    FileSize = r.IsDBNull(16) ? null : r.GetInt64(16),
-                    ThumbnailPath = r.IsDBNull(17) ? null : r.GetString(17),
-                    MetadataStatus = r.GetInt32(18),
-                    CreatedAt = r.GetDateTime(19),
-                    UpdatedAt = r.GetDateTime(20)
+                    AlternativeArtist = r.IsDBNull(5) ? null : r.GetString(5),
+                    IsOriginalNonEnglish = r.IsDBNull(6) ? 0 : r.GetInt32(6),
+                    Source = r.GetString(7),
+                    YoutubeID = r.IsDBNull(8) ? null : r.GetString(8),
+                    FilePath = r.GetString(9),
+                    Genre = r.IsDBNull(10) ? null : r.GetString(10),
+                    Artist = r.IsDBNull(11) ? null : r.GetString(11),
+                    Duration = r.IsDBNull(12) ? null : r.GetDouble(12),
+                    Resolution = r.IsDBNull(13) ? null : r.GetString(13),
+                    Bitrate = r.IsDBNull(14) ? null : r.GetInt32(14),
+                    SampleRate = r.IsDBNull(15) ? null : r.GetInt32(15),
+                    Channels = r.IsDBNull(16) ? null : r.GetInt32(16),
+                    Year = r.IsDBNull(17) ? null : r.GetInt32(17),
+                    FileSize = r.IsDBNull(18) ? null : r.GetInt64(18),
+                    ThumbnailPath = r.IsDBNull(19) ? null : r.GetString(19),
+                    MetadataStatus = r.GetInt32(20),
+                    CreatedAt = r.GetDateTime(21),
+                    UpdatedAt = r.GetDateTime(22)
                 });
             }
             return records;
@@ -274,7 +278,7 @@ namespace Autonomuse.Services.Orchestration
                 using var conn = new SqliteConnection(_mediaDb.GetConnectionString());
                 await conn.OpenAsync();
                 var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT [GUID],[FileName],[Title],[Extension],[AlternativeTitle],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt] FROM Video WHERE [Title] = @title AND [Source] = @source COLLATE NOCASE LIMIT 1";
+                cmd.CommandText = "SELECT [GUID],[FileName],[Title],[Extension],[AlternativeTitle],[AlternativeArtist],[IsOriginalNonEnglish],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt] FROM Video WHERE [Title] = @title AND [Source] = @source COLLATE NOCASE LIMIT 1";
                 cmd.Parameters.AddWithValue("@title", title);
                 cmd.Parameters.AddWithValue("@source", source);
 
@@ -288,22 +292,24 @@ namespace Autonomuse.Services.Orchestration
                         Title = r.GetString(2),
                         Extension = r.GetString(3),
                         AlternativeTitle = r.IsDBNull(4) ? null : r.GetString(4),
-                        Source = r.GetString(5),
-                        YoutubeID = r.IsDBNull(6) ? null : r.GetString(6),
-                        FilePath = r.GetString(7),
-                        Genre = r.IsDBNull(8) ? null : r.GetString(8),
-                        Artist = r.IsDBNull(9) ? null : r.GetString(9),
-                        Duration = r.IsDBNull(10) ? null : r.GetDouble(10),
-                        Resolution = r.IsDBNull(11) ? null : r.GetString(11),
-                        Bitrate = r.IsDBNull(12) ? null : r.GetInt32(12),
-                        SampleRate = r.IsDBNull(13) ? null : r.GetInt32(13),
-                        Channels = r.IsDBNull(14) ? null : r.GetInt32(14),
-                        Year = r.IsDBNull(15) ? null : r.GetInt32(15),
-                        FileSize = r.IsDBNull(16) ? null : r.GetInt64(16),
-                        ThumbnailPath = r.IsDBNull(17) ? null : r.GetString(17),
-                        MetadataStatus = r.GetInt32(18),
-                        CreatedAt = r.GetDateTime(19),
-                        UpdatedAt = r.GetDateTime(20)
+                        AlternativeArtist = r.IsDBNull(5) ? null : r.GetString(5),
+                        IsOriginalNonEnglish = r.IsDBNull(6) ? 0 : r.GetInt32(6),
+                        Source = r.GetString(7),
+                        YoutubeID = r.IsDBNull(8) ? null : r.GetString(8),
+                        FilePath = r.GetString(9),
+                        Genre = r.IsDBNull(10) ? null : r.GetString(10),
+                        Artist = r.IsDBNull(11) ? null : r.GetString(11),
+                        Duration = r.IsDBNull(12) ? null : r.GetDouble(12),
+                        Resolution = r.IsDBNull(13) ? null : r.GetString(13),
+                        Bitrate = r.IsDBNull(14) ? null : r.GetInt32(14),
+                        SampleRate = r.IsDBNull(15) ? null : r.GetInt32(15),
+                        Channels = r.IsDBNull(16) ? null : r.GetInt32(16),
+                        Year = r.IsDBNull(17) ? null : r.GetInt32(17),
+                        FileSize = r.IsDBNull(18) ? null : r.GetInt64(18),
+                        ThumbnailPath = r.IsDBNull(19) ? null : r.GetString(19),
+                        MetadataStatus = r.GetInt32(20),
+                        CreatedAt = r.GetDateTime(21),
+                        UpdatedAt = r.GetDateTime(22)
                     };
                 }
             }
@@ -321,7 +327,7 @@ namespace Autonomuse.Services.Orchestration
                 using var conn = new SqliteConnection(_mediaDb.GetConnectionString());
                 await conn.OpenAsync();
                 var cmd = conn.CreateCommand();
-                cmd.CommandText = "SELECT [GUID],[FileName],[Title],[Extension],[AlternativeTitle],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt] FROM Video WHERE [YoutubeID] = @yid LIMIT 1";
+                cmd.CommandText = "SELECT [GUID],[FileName],[Title],[Extension],[AlternativeTitle],[AlternativeArtist],[IsOriginalNonEnglish],[Source],[YoutubeID],[FilePath],[Genre],[Artist],[Duration],[Resolution],[Bitrate],[SampleRate],[Channels],[Year],[FileSize],[ThumbnailPath],[MetadataStatus],[CreatedAt],[UpdatedAt] FROM Video WHERE [YoutubeID] = @yid LIMIT 1";
                 cmd.Parameters.AddWithValue("@yid", youtubeId);
 
                 using var r = await cmd.ExecuteReaderAsync();
@@ -334,22 +340,24 @@ namespace Autonomuse.Services.Orchestration
                         Title = r.GetString(2),
                         Extension = r.GetString(3),
                         AlternativeTitle = r.IsDBNull(4) ? null : r.GetString(4),
-                        Source = r.GetString(5),
-                        YoutubeID = r.IsDBNull(6) ? null : r.GetString(6),
-                        FilePath = r.GetString(7),
-                        Genre = r.IsDBNull(8) ? null : r.GetString(8),
-                        Artist = r.IsDBNull(9) ? null : r.GetString(9),
-                        Duration = r.IsDBNull(10) ? null : r.GetDouble(10),
-                        Resolution = r.IsDBNull(11) ? null : r.GetString(11),
-                        Bitrate = r.IsDBNull(12) ? null : r.GetInt32(12),
-                        SampleRate = r.IsDBNull(13) ? null : r.GetInt32(13),
-                        Channels = r.IsDBNull(14) ? null : r.GetInt32(14),
-                        Year = r.IsDBNull(15) ? null : r.GetInt32(15),
-                        FileSize = r.IsDBNull(16) ? null : r.GetInt64(16),
-                        ThumbnailPath = r.IsDBNull(17) ? null : r.GetString(17),
-                        MetadataStatus = r.GetInt32(18),
-                        CreatedAt = r.GetDateTime(19),
-                        UpdatedAt = r.GetDateTime(20)
+                        AlternativeArtist = r.IsDBNull(5) ? null : r.GetString(5),
+                        IsOriginalNonEnglish = r.IsDBNull(6) ? 0 : r.GetInt32(6),
+                        Source = r.GetString(7),
+                        YoutubeID = r.IsDBNull(8) ? null : r.GetString(8),
+                        FilePath = r.GetString(9),
+                        Genre = r.IsDBNull(10) ? null : r.GetString(10),
+                        Artist = r.IsDBNull(11) ? null : r.GetString(11),
+                        Duration = r.IsDBNull(12) ? null : r.GetDouble(12),
+                        Resolution = r.IsDBNull(13) ? null : r.GetString(13),
+                        Bitrate = r.IsDBNull(14) ? null : r.GetInt32(14),
+                        SampleRate = r.IsDBNull(15) ? null : r.GetInt32(15),
+                        Channels = r.IsDBNull(16) ? null : r.GetInt32(16),
+                        Year = r.IsDBNull(17) ? null : r.GetInt32(17),
+                        FileSize = r.IsDBNull(18) ? null : r.GetInt64(18),
+                        ThumbnailPath = r.IsDBNull(19) ? null : r.GetString(19),
+                        MetadataStatus = r.GetInt32(20),
+                        CreatedAt = r.GetDateTime(21),
+                        UpdatedAt = r.GetDateTime(22)
                     };
                 }
             }
@@ -394,7 +402,7 @@ namespace Autonomuse.Services.Orchestration
                 var command = connection.CreateCommand();
                 command.CommandText = @"
                     UPDATE Video SET 
-                        [Title] = @title, [AlternativeTitle] = @altTitle, [Artist] = @artist, 
+                        [Title] = @title, [AlternativeTitle] = @altTitle, [AlternativeArtist] = @altArtist, [IsOriginalNonEnglish] = @isNonEnglish, [Artist] = @artist, 
                         [Genre] = @genre, [Year] = @year, 
                         [ThumbnailPath] = @thumbnail, [MetadataStatus] = @ms, [UpdatedAt] = @updatedAt
                     WHERE [GUID] = @guid;
@@ -402,6 +410,8 @@ namespace Autonomuse.Services.Orchestration
 
                 command.Parameters.AddWithValue("@title", record.Title);
                 command.Parameters.AddWithValue("@altTitle", (object?)record.AlternativeTitle ?? DBNull.Value);
+                command.Parameters.AddWithValue("@altArtist", (object?)record.AlternativeArtist ?? DBNull.Value);
+                command.Parameters.AddWithValue("@isNonEnglish", record.IsOriginalNonEnglish);
                 command.Parameters.AddWithValue("@artist", (object?)record.Artist ?? DBNull.Value);
                 command.Parameters.AddWithValue("@genre", (object?)record.Genre ?? DBNull.Value);
                 command.Parameters.AddWithValue("@year", (object?)record.Year ?? DBNull.Value);
@@ -628,7 +638,7 @@ namespace Autonomuse.Services.Orchestration
                 await conn.OpenAsync();
                 var cmd = conn.CreateCommand();
                 cmd.CommandText = @"
-                    SELECT v.[GUID], v.[FileName], v.[Title], v.[Extension], v.[AlternativeTitle], 
+                    SELECT v.[GUID], v.[FileName], v.[Title], v.[Extension], v.[AlternativeTitle], v.[AlternativeArtist], v.[IsOriginalNonEnglish],
                            v.[Source], v.[YoutubeID], v.[FilePath], v.[Genre], v.[Artist], 
                            v.[Duration], v.[Resolution], v.[Bitrate], v.[SampleRate], v.[Channels], 
                            v.[Year], v.[FileSize], v.[ThumbnailPath], v.[MetadataStatus], v.[CreatedAt], v.[UpdatedAt] 
@@ -649,22 +659,24 @@ namespace Autonomuse.Services.Orchestration
                         Title = r.GetString(2),
                         Extension = r.GetString(3),
                         AlternativeTitle = r.IsDBNull(4) ? null : r.GetString(4),
-                        Source = r.GetString(5),
-                        YoutubeID = r.IsDBNull(6) ? null : r.GetString(6),
-                        FilePath = r.GetString(7),
-                        Genre = r.IsDBNull(8) ? null : r.GetString(8),
-                        Artist = r.IsDBNull(9) ? null : r.GetString(9),
-                        Duration = r.IsDBNull(10) ? null : r.GetDouble(10),
-                        Resolution = r.IsDBNull(11) ? null : r.GetString(11),
-                        Bitrate = r.IsDBNull(12) ? null : r.GetInt32(12),
-                        SampleRate = r.IsDBNull(13) ? null : r.GetInt32(13),
-                        Channels = r.IsDBNull(14) ? null : r.GetInt32(14),
-                        Year = r.IsDBNull(15) ? null : r.GetInt32(15),
-                        FileSize = r.IsDBNull(16) ? null : r.GetInt64(16),
-                        ThumbnailPath = r.IsDBNull(17) ? null : r.GetString(17),
-                        MetadataStatus = r.GetInt32(18),
-                        CreatedAt = r.GetDateTime(19),
-                        UpdatedAt = r.GetDateTime(20)
+                        AlternativeArtist = r.IsDBNull(5) ? null : r.GetString(5),
+                        IsOriginalNonEnglish = r.IsDBNull(6) ? 0 : r.GetInt32(6),
+                        Source = r.GetString(7),
+                        YoutubeID = r.IsDBNull(8) ? null : r.GetString(8),
+                        FilePath = r.GetString(9),
+                        Genre = r.IsDBNull(10) ? null : r.GetString(10),
+                        Artist = r.IsDBNull(11) ? null : r.GetString(11),
+                        Duration = r.IsDBNull(12) ? null : r.GetDouble(12),
+                        Resolution = r.IsDBNull(13) ? null : r.GetString(13),
+                        Bitrate = r.IsDBNull(14) ? null : r.GetInt32(14),
+                        SampleRate = r.IsDBNull(15) ? null : r.GetInt32(15),
+                        Channels = r.IsDBNull(16) ? null : r.GetInt32(16),
+                        Year = r.IsDBNull(17) ? null : r.GetInt32(17),
+                        FileSize = r.IsDBNull(18) ? null : r.GetInt64(18),
+                        ThumbnailPath = r.IsDBNull(19) ? null : r.GetString(19),
+                        MetadataStatus = r.GetInt32(20),
+                        CreatedAt = r.GetDateTime(21),
+                        UpdatedAt = r.GetDateTime(22)
                     });
                 }
             }
@@ -781,6 +793,64 @@ namespace Autonomuse.Services.Orchestration
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error deleting video backup for {GUID}", guid);
+            }
+        }
+
+        public async Task DeletePlaylistAsync(string playlistGuid)
+        {
+            using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
+            await connection.OpenAsync();
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                // Get URL from description
+                string? url = null;
+                using (var getCmd = connection.CreateCommand())
+                {
+                    getCmd.Transaction = transaction;
+                    getCmd.CommandText = "SELECT Description FROM VideoPlaylist WHERE GUID = @g";
+                    getCmd.Parameters.AddWithValue("@g", playlistGuid);
+                    url = await getCmd.ExecuteScalarAsync() as string;
+                }
+
+                // Delete playlist items
+                using (var itemCmd = connection.CreateCommand())
+                {
+                    itemCmd.Transaction = transaction;
+                    itemCmd.CommandText = "DELETE FROM VideoPlaylistItems WHERE PlaylistGUID = @g";
+                    itemCmd.Parameters.AddWithValue("@g", playlistGuid);
+                    await itemCmd.ExecuteNonQueryAsync();
+                }
+
+                // Delete playlist
+                using (var playlistCmd = connection.CreateCommand())
+                {
+                    playlistCmd.Transaction = transaction;
+                    playlistCmd.CommandText = "DELETE FROM VideoPlaylist WHERE GUID = @g";
+                    playlistCmd.Parameters.AddWithValue("@g", playlistGuid);
+                    await playlistCmd.ExecuteNonQueryAsync();
+                }
+
+                // Delete watcher
+                if (!string.IsNullOrEmpty(url))
+                {
+                    using (var watchCmd = connection.CreateCommand())
+                    {
+                        watchCmd.Transaction = transaction;
+                        watchCmd.CommandText = "DELETE FROM VideoWatchPlaylist WHERE Url = @u";
+                        watchCmd.Parameters.AddWithValue("@u", url);
+                        await watchCmd.ExecuteNonQueryAsync();
+                    }
+                }
+
+                await transaction.CommitAsync();
+                _logger.LogInformation("Deleted video playlist: {GUID}", playlistGuid);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to delete video playlist {GUID}", playlistGuid);
+                throw;
             }
         }
     }

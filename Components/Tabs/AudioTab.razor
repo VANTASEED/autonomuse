@@ -1,6 +1,8 @@
+@implements IAsyncDisposable
 @using Autonomuse.Domain.Entities
 @using Autonomuse.Shared.Contracts
 @using Autonomuse.Shared.Utilities
+@using Microsoft.JSInterop
 @inject IAudioService AudioService
 @inject ISettingsService SettingsService
 @inject IAudioEnrichmentService EnrichmentService
@@ -69,8 +71,10 @@
                         {
                             <div class="confirm-group">
                                 <span class="confirm-text">Delete @_selectedGuids.Count items?</span>
-                                <button class="action-btn danger-btn" @onclick="ConfirmDeleteSelectedAsync">Confirm</button>
-                                <button class="action-btn select-audio" @onclick="() => _showDeleteConfirm = false">Cancel</button>
+                                <div class="confirm-buttons">
+                                    <button class="action-btn danger-btn" @onclick="ConfirmDeleteSelectedAsync">Confirm</button>
+                                    <button class="action-btn select-audio" @onclick="() => _showDeleteConfirm = false">Cancel</button>
+                                </div>
                             </div>
                         }
                         else
@@ -117,6 +121,8 @@
                                         <li><strong>genre</strong> filter by genre (e.g. <code>electronic</code>)</li>
                                         <li><strong>year</strong> filter by year (e.g. <code>2013</code>)</li>
                                         <li><strong>title</strong> filter by song title</li>
+                                        <li><strong>original_title</strong> filter by original title (before enrichment)</li>
+                                        <li><strong>original_artist</strong> filter by original artist (before enrichment)</li>
                                     </ul>
                                     <p class="tooltip-example">Example: <code>artist:daft_punk, year:2013</code></p>
                                 </div>
@@ -185,6 +191,7 @@
                                 <div class="dropdown-item @(_selectedStatus == "full" ? "active" : "")" @onclick='() => SelectStatus("full")'>Full</div>
                                 <div class="dropdown-item @(_selectedStatus == "manual" ? "active" : "")" @onclick='() => SelectStatus("manual")'>Manual</div>
                                 <div class="dropdown-item @(_selectedStatus == "disabled" ? "active" : "")" @onclick='() => SelectStatus("disabled")'>Locked</div>
+                                <div class="dropdown-item @(_selectedStatus == "failed" ? "active" : "")" @onclick='() => SelectStatus("failed")'>Failed</div>
                             </div>
                         }
                     </div>
@@ -241,10 +248,11 @@
             else
             {
                 <div class="music-cards-grid @(_isSelectionMode ? "selection-mode" : "")">
-                    @foreach (var record in FilteredRecords)
+                    @foreach (var record in DisplayedRecords)
                     {
                         var isSelected = _selectedGuids.Contains(record.GUID);
                         var coverUrl = _coverArts.TryGetValue(record.GUID, out var url) ? url : "images/Assets/empty_cover.png";
+                        if (!_coverArts.ContainsKey(record.GUID)) _ = LoadCoverArtAsync(record);
                         var rawTitle = string.IsNullOrEmpty(record.AlternativeTitle) ? record.Title : record.AlternativeTitle;
                         var displayTitle = FilePathSanitizer.SterilizeTitle(rawTitle, _sterilizationTags);
                         var displayArtist = string.IsNullOrEmpty(record.Artist) ? "Unknown Artist" : record.Artist;
@@ -334,8 +342,8 @@
                                         <span class="pill source-pill @(record.Source == "youtube" ? "youtube" : "manual")">
                                             @(record.Source == "youtube" ? "YouTube" : "Manual")
                                         </span>
-                                        <span class="pill status-pill @GetStatusClass(record.EnrichmentStatus)"
-                                              title="@GetStatusTitle(record.EnrichmentStatus)">
+                                        <span class="pill status-pill @GetStatusClass(record.EnrichmentStatus) @(record.FailedEnrich == 1 ? "failed" : "")"
+                                              title="@GetFullStatusTitle(record)">
                                             @GetStatusText(record.EnrichmentStatus)
                                         </span>
                                     </div>
@@ -375,6 +383,7 @@
                         </div>
                     }
                 </div>
+                <div id="audio-scroll-sentinel"></div>
             }
         </div>
         }
@@ -743,6 +752,11 @@
     private List<AudioRecord> _playlistItems = new();
     private List<AudioRecord> _filteredRecords = new();
     private List<AudioRecord> FilteredRecords => _filteredRecords;
+    private int _displayCount = 50;
+    private const int PageSize = 50;
+    private DotNetObjectReference<AudioTab>? _dotNetRef;
+    private List<AudioRecord> DisplayedRecords => _filteredRecords.Take(_displayCount).ToList();
+    private bool HasMoreRecords => _displayCount < _filteredRecords.Count;
 
     protected override async Task OnInitializedAsync()
     {
@@ -772,6 +786,7 @@
             // If any-playlist or none-playlist, we'll refresh the set just in case
             _guidsInAnyPlaylist = await AudioService.GetAudioGuidsInAnyPlaylistAsync();
         }
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -784,6 +799,7 @@
     {
         _selectedStatus = status;
         _isStatusDropdownOpen = false;
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -795,6 +811,7 @@
             "partial" => "Partial",
             "full" => "Full",
             "disabled" => "Disabled",
+            "failed" => "Failed",
             _ => "All Status"
         };
     }
@@ -802,6 +819,7 @@
     private async Task SetSourceFilter(string source)
     {
         _selectedSource = source;
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -814,6 +832,7 @@
     {
         _selectedSort = sort;
         _isSortDropdownOpen = false;
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -832,12 +851,14 @@
     private async Task SetSortDirection(bool isAscending)
     {
         _isSortAscending = isAscending;
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
     private async Task ToggleSortDirection()
     {
         _isSortAscending = !_isSortAscending;
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -853,7 +874,7 @@
             record.EnrichmentStatus = 10 + record.EnrichmentStatus;
         }
         await AudioService.UpdateAudioRecordAsync(record);
-        await LoadAudioRecordsAsync();
+        await RefreshDisplayAsync();
     }
 
     private async Task ClearAllFiltersAsync()
@@ -865,11 +886,13 @@
         _selectedSort = "title";
         _isSortAscending = true;
         _playlistItems.Clear();
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
     private async Task PerformSearch()
     {
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -919,6 +942,8 @@
                     "genre" => results.Where(r => r.Genre?.ToLower().Contains(value) == true),
                     "year" => results.Where(r => r.Year?.ToString().Contains(value) == true),
                     "title" => results.Where(r => (r.AlternativeTitle?.ToLower().Contains(value) == true) || (r.Title?.ToLower().Contains(value) == true)),
+                    "original_title" => results.Where(r => r.Title?.ToLower().Contains(value) == true),
+                    "original_artist" => results.Where(r => r.Artist?.ToLower().Contains(value) == true),
                     _ => results
                 };
             }
@@ -932,6 +957,7 @@
             else if (_selectedStatus == "full") results = results.Where(r => r.EnrichmentStatus == 1);
             else if (_selectedStatus == "disabled") results = results.Where(r => r.EnrichmentStatus == 3 || r.EnrichmentStatus >= 10);
             else if (_selectedStatus == "manual") results = results.Where(r => r.EnrichmentStatus == 4);
+            else if (_selectedStatus == "failed") results = results.Where(r => r.FailedEnrich == 1);
         }
 
         // 5. Sorting
@@ -952,9 +978,15 @@
         StateHasChanged();
     }
 
+    private async Task RefreshDisplayAsync()
+    {
+        await ApplyFiltersAsync();
+    }
+
     private async Task ClearSearch()
     {
         _searchQuery = "";
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -988,34 +1020,7 @@
             }
 
             _audioRecords = await AudioService.GetAllAudioAsync();
-            foreach(var record in _audioRecords)
-            {
-                if (!string.IsNullOrEmpty(record.CoverArtPath) && System.IO.File.Exists(record.CoverArtPath))
-                {
-                    var ext = System.IO.Path.GetExtension(record.CoverArtPath).ToLowerInvariant();
-                    var mimeType = ext switch
-                    {
-                        ".png" => "image/png",
-                        ".webp" => "image/webp",
-                        ".gif" => "image/gif",
-                        _ => "image/jpeg"
-                    };
-                    
-                    try
-                    {
-                        var bytes = await System.IO.File.ReadAllBytesAsync(record.CoverArtPath);
-                        _coverArts[record.GUID] = $"data:{mimeType};base64,{Convert.ToBase64String(bytes)}";
-                    }
-                    catch
-                    {
-                        _coverArts[record.GUID] = "images/Assets/empty_cover.png";
-                    }
-                }
-                else
-                {
-                    _coverArts[record.GUID] = "images/Assets/empty_cover.png";
-                }
-            }
+            _coverArts.Clear();
         }
         catch (Exception ex)
         {
@@ -1046,10 +1051,8 @@
         try
         {
             var result = await EnrichmentService.EnrichAudioAsync(record);
-            if (result.Success)
-            {
-                await LoadAudioRecordsAsync(); // Refresh UI
-            }
+            _coverArts.Remove(record.GUID);
+            await RefreshDisplayAsync();
         }
         catch (Exception ex)
         {
@@ -1072,7 +1075,7 @@
             var backup = new AudioBackup
             {
                 GUID = record.GUID,
-                AlternativeTitle = record.AlternativeTitle,
+                AlternativeTitle = record.AlternativeTitle ?? record.Title,
                 YoutubeID = record.YoutubeID,
                 Artist = record.Artist,
                 Album = record.Album,
@@ -1126,7 +1129,8 @@
             var result = await EnrichmentService.RestoreAudioAsync(record);
             if (result.Success)
             {
-                await LoadAudioRecordsAsync(); // Refresh UI
+                _coverArts.Remove(record.GUID);
+                await RefreshDisplayAsync();
             }
         }
         catch (Exception ex)
@@ -1140,10 +1144,29 @@
         }
     }
 
-    private void TogglePlaylistManager()
+    private async Task TogglePlaylistManager()
     {
         _showPlaylistManager = !_showPlaylistManager;
         _showWatchManager = false;
+        if (!_showPlaylistManager)
+        {
+            _playlists = await AudioService.GetPlaylistsAsync();
+            _guidsInAnyPlaylist = await AudioService.GetAudioGuidsInAnyPlaylistAsync();
+            if (!string.IsNullOrEmpty(_selectedPlaylistId) && _selectedPlaylistId != "any-playlist" && _selectedPlaylistId != "none-playlist")
+            {
+                if (!_playlists.Any(p => p.GUID == _selectedPlaylistId))
+                {
+                    _selectedPlaylistId = null;
+                    _selectedPlaylistName = "All Audio";
+                    _playlistItems.Clear();
+                }
+                else
+                {
+                    _playlistItems = await AudioService.GetAudioInPlaylistAsync(_selectedPlaylistId);
+                }
+            }
+            await ApplyFiltersAsync();
+        }
         StateHasChanged();
     }
 
@@ -1465,6 +1488,13 @@
         };
     }
 
+    private string GetFullStatusTitle(AudioRecord record)
+    {
+        var title = GetStatusTitle(record.EnrichmentStatus);
+        if (record.FailedEnrich == 1) title += " (failed to enrich)";
+        return title;
+    }
+
     private string GetStatusText(int status)
     {
         if (status >= 10 || status == 3) return "Locked";
@@ -1501,6 +1531,7 @@
             record.Genre = _editGenre;
             record.Year = _editYear;
             record.EnrichmentStatus = 4; // Set to Manual
+            record.FailedEnrich = 0;
 
             if (_hasNewCoverArtUploaded && _uploadedCoverArtBytes != null)
             {
@@ -1513,7 +1544,8 @@
             await AudioService.UpdatePhysicalTagsAsync(record);
 
             _editMetadataRecord = null;
-            await LoadAudioRecordsAsync();
+            _coverArts.Remove(record.GUID);
+            await RefreshDisplayAsync();
         }
         catch (Exception ex)
         {
@@ -1537,7 +1569,7 @@
         }
         _selectedGuids.Clear();
         _isSelectionMode = false;
-        await LoadAudioRecordsAsync();
+        await RefreshDisplayAsync();
     }
 
     private async Task UnlockSelectedAsync()
@@ -1551,7 +1583,7 @@
         }
         _selectedGuids.Clear();
         _isSelectionMode = false;
-        await LoadAudioRecordsAsync();
+        await RefreshDisplayAsync();
     }
 
     private async Task EnrichSelectedAsync()
@@ -1579,8 +1611,9 @@
                 StateHasChanged();
                 
                 await EnrichmentService.EnrichAudioAsync(record);
+                _coverArts.Remove(record.GUID);
             }
-            await LoadAudioRecordsAsync();
+            await RefreshDisplayAsync();
         }
         catch (Exception ex)
         {
@@ -1619,8 +1652,9 @@
                 StateHasChanged();
 
                 await EnrichmentService.RestoreAudioAsync(record);
+                _coverArts.Remove(record.GUID);
             }
-            await LoadAudioRecordsAsync();
+            await RefreshDisplayAsync();
         }
         catch (Exception ex)
         {
@@ -1632,5 +1666,56 @@
             _selectedGuids.Clear();
             StateHasChanged();
         }
+    }
+
+    private async Task LoadCoverArtAsync(AudioRecord record)
+    {
+        if (string.IsNullOrEmpty(record.CoverArtPath) || !System.IO.File.Exists(record.CoverArtPath))
+        {
+            _coverArts[record.GUID] = "images/Assets/empty_cover.png";
+            return;
+        }
+        try
+        {
+            var ext = System.IO.Path.GetExtension(record.CoverArtPath).ToLowerInvariant();
+            var mimeType = ext switch
+            {
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                ".gif" => "image/gif",
+                _ => "image/jpeg"
+            };
+            var bytes = await System.IO.File.ReadAllBytesAsync(record.CoverArtPath);
+            _coverArts[record.GUID] = $"data:{mimeType};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch
+        {
+            _coverArts[record.GUID] = "images/Assets/empty_cover.png";
+        }
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (HasMoreRecords)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("setupInfiniteScroll", "audio-scroll-sentinel", _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task LoadMore()
+    {
+        if (!HasMoreRecords) return;
+        _displayCount += PageSize;
+        StateHasChanged();
+        await JSRuntime.InvokeVoidAsync("setupInfiniteScroll", "audio-scroll-sentinel", _dotNetRef);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("teardownInfiniteScroll");
+        _dotNetRef?.Dispose();
     }
 }

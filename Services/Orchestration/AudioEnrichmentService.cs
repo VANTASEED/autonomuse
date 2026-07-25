@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Tasks;
 using Autonomuse.Domain.Entities;
 using Autonomuse.Shared.Contracts;
 using Autonomuse.Shared.Utilities;
@@ -62,6 +63,8 @@ namespace Autonomuse.Services.Orchestration
                     _logger.LogWarning("Missing fingerprint for {Title}. Enrichment may be less accurate.", record.Title);
                     // Fallback: Generate if missing (per user request to "remove" it, I'll strictly use what's there or fail if they want strictness)
                     // But for robustness, I'll return failure if missing.
+                    record.FailedEnrich = 1;
+                    await _audioService.UpdateAudioRecordAsync(record);
                     return (false, "No audio fingerprint found. Please re-ingest this file.");
                 }
 
@@ -92,6 +95,7 @@ namespace Autonomuse.Services.Orchestration
                         metadata.Genre = mbMeta.Genre ?? metadata.Genre;
                         metadata.Year = mbMeta.Year ?? metadata.Year;
                         metadata.ReleaseId = mbMeta.ReleaseId;
+                        metadata.ReleaseIds = mbMeta.ReleaseIds;
                         metadata.AppleMusicId = mbMeta.AppleMusicId;
                         
                         record.EnrichmentStatus = 1; // MusicBrainz Enriched
@@ -108,13 +112,32 @@ namespace Autonomuse.Services.Orchestration
                         record.EnrichmentStatus = 2;
                     }
                 }
+                // Save English YouTube values before ApplyMetadata overwrites AlternativeTitle
+                var ytEnglishTitle = record.AlternativeTitle;
+                var ytEnglishArtist = record.AlternativeArtist;
+
                 bool changed = ApplyMetadata(record, metadata);
-                
-                // 4. Cover Art Step
-                bool artFound = false;
-                if (!string.IsNullOrEmpty(metadata.ReleaseId))
+
+                if (record.IsOriginalNonEnglish == 1)
                 {
-                    artFound = await UpdateCoverArtArchiveAsync(record, metadata.ReleaseId);
+                    if (!string.IsNullOrEmpty(ytEnglishTitle))
+                        record.Title = ytEnglishTitle;
+                    if (!string.IsNullOrEmpty(ytEnglishArtist))
+                        record.Artist = ytEnglishArtist;
+                }
+
+                // 4. Cover Art Step — try every release ID from MusicBrainz
+                bool artFound = false;
+                if (metadata.ReleaseIds != null && metadata.ReleaseIds.Count > 0)
+                {
+                    foreach (var rid in metadata.ReleaseIds)
+                    {
+                        if (await UpdateCoverArtArchiveAsync(record, rid))
+                        {
+                            artFound = true;
+                            break;
+                        }
+                    }
                 }
 
                 // Fallback: If no MB art found, and we matched Apple Music, try to download Apple art
@@ -124,6 +147,14 @@ namespace Autonomuse.Services.Orchestration
                     artFound = true;
                 }
 
+                if (!mbSuccess && !amSuccess)
+                {
+                    record.FailedEnrich = 1;
+                    await _audioService.UpdateAudioRecordAsync(record);
+                    return (false, "No metadata found on MusicBrainz or Apple Music.");
+                }
+
+                record.FailedEnrich = 0;
                 await _audioService.UpdateAudioRecordAsync(record);
                 await _audioService.UpdatePhysicalTagsAsync(record);
                 
@@ -133,6 +164,12 @@ namespace Autonomuse.Services.Orchestration
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Enrichment failed for {Title}", record.Title);
+                // Only mark as failed enrich for non-connection issues
+                if (ex is not HttpRequestException and not TaskCanceledException)
+                {
+                    record.FailedEnrich = 1;
+                    await _audioService.UpdateAudioRecordAsync(record);
+                }
                 return (false, $"Error: {ex.Message}");
             }
         }
@@ -183,6 +220,7 @@ namespace Autonomuse.Services.Orchestration
                 record.Genre = backup.Genre;
                 record.Year = backup.Year;
                 record.EnrichmentStatus = 0;
+                record.FailedEnrich = 0;
 
                 await _audioService.UpdateAudioRecordAsync(record);
                 await _audioService.UpdatePhysicalTagsAsync(record);
@@ -278,6 +316,12 @@ namespace Autonomuse.Services.Orchestration
 
                         if (firstRelease.TryGetProperty("date", out var dateProp))
                             metadata.Year = ParseYear(dateProp.GetString());
+
+                        metadata.ReleaseIds = releases.EnumerateArray()
+                            .Select(r => r.TryGetProperty("id", out var rid) ? rid.GetString() : null)
+                            .Where(id => !string.IsNullOrEmpty(id))
+                            .Distinct()
+                            .ToList()!;
                     }
 
                     if (root.TryGetProperty("genres", out var genres) && genres.GetArrayLength() > 0)
@@ -614,7 +658,7 @@ namespace Autonomuse.Services.Orchestration
             var backup = new AudioBackup
             {
                 GUID = record.GUID,
-                AlternativeTitle = record.AlternativeTitle,
+                AlternativeTitle = record.AlternativeTitle ?? record.Title,
                 YoutubeID = record.YoutubeID,
                 Artist = record.Artist,
                 Album = record.Album,
@@ -713,6 +757,7 @@ namespace Autonomuse.Services.Orchestration
             public string? Genre { get; set; }
             public int? Year { get; set; }
             public string? ReleaseId { get; set; }
+            public List<string>? ReleaseIds { get; set; }
             public string? AppleMusicId { get; set; }
             public string? AppleMusicArtworkUrl { get; set; }
         }

@@ -134,6 +134,30 @@ namespace Autonomuse.Infrastructure.Data
                     await insertCmd.ExecuteNonQueryAsync();
                 }
 
+                // 4. Initialize PreferredVideoQuality
+                var videoQualCmd = connection.CreateCommand();
+                videoQualCmd.CommandText = "SELECT COUNT(*) FROM Settings WHERE [Parameter] = 'PreferredVideoQuality'";
+                var videoQualExists = Convert.ToInt32(await videoQualCmd.ExecuteScalarAsync()) > 0;
+
+                if (!videoQualExists)
+                {
+                    var insertCmd = connection.CreateCommand();
+                    insertCmd.CommandText = "INSERT INTO Settings ([Parameter], [Values]) VALUES ('PreferredVideoQuality', '1080')";
+                    await insertCmd.ExecuteNonQueryAsync();
+                }
+
+                // 5. Initialize PreferredAudioQuality
+                var audioQualCmd = connection.CreateCommand();
+                audioQualCmd.CommandText = "SELECT COUNT(*) FROM Settings WHERE [Parameter] = 'PreferredAudioQuality'";
+                var audioQualExists = Convert.ToInt32(await audioQualCmd.ExecuteScalarAsync()) > 0;
+
+                if (!audioQualExists)
+                {
+                    var insertCmd = connection.CreateCommand();
+                    insertCmd.CommandText = "INSERT INTO Settings ([Parameter], [Values]) VALUES ('PreferredAudioQuality', '320')";
+                    await insertCmd.ExecuteNonQueryAsync();
+                }
+
                 _logger.LogInformation("Core settings initialized (DebugMode: {Status})", _isDebugMode);
             }
             catch (Exception ex)

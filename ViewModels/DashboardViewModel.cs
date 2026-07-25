@@ -35,6 +35,8 @@ namespace Autonomuse.ViewModels
         private Guid _statusId = Guid.NewGuid();
         private ObservableCollection<YoutubeDownloadFailure> _youtubeDownloadFailures = new();
         private bool _isYoutubeStatusExpanded;
+        private string _selectedVideoQuality = "1080";
+        private string _selectedAudioQuality = "320";
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -95,8 +97,100 @@ namespace Autonomuse.ViewModels
             set { _inputFileKey = value; OnPropertyChanged(); }
         }
 
+        public string SelectedVideoQuality
+        {
+            get => _selectedVideoQuality;
+            set
+            {
+                if (_selectedVideoQuality != value)
+                {
+                    _selectedVideoQuality = value;
+                    OnPropertyChanged();
+                    _ = _settingsService.SaveSettingAsync("PreferredVideoQuality", value);
+                }
+            }
+        }
+
+        public string SelectedAudioQuality
+        {
+            get => _selectedAudioQuality;
+            set
+            {
+                if (_selectedAudioQuality != value)
+                {
+                    _selectedAudioQuality = value;
+                    OnPropertyChanged();
+                    _ = _settingsService.SaveSettingAsync("PreferredAudioQuality", value);
+                }
+            }
+        }
+
+        public async Task LoadSettingsAsync()
+        {
+            var videoQuality = await _settingsService.GetSettingAsync("PreferredVideoQuality");
+            if (!string.IsNullOrEmpty(videoQuality))
+            {
+                _selectedVideoQuality = videoQuality;
+                OnPropertyChanged(nameof(SelectedVideoQuality));
+            }
+            var audioQuality = await _settingsService.GetSettingAsync("PreferredAudioQuality");
+            if (!string.IsNullOrEmpty(audioQuality))
+            {
+                _selectedAudioQuality = audioQuality;
+                OnPropertyChanged(nameof(SelectedAudioQuality));
+            }
+
+            // Clean up any leftover .part files and orphaned _youtube_ files from previous incomplete downloads
+            var libraryPath = await _settingsService.GetSettingAsync("LibraryPath");
+            if (!string.IsNullOrEmpty(libraryPath))
+            {
+                await CleanupOrphanedDownloadsAsync(libraryPath);
+            }
+        }
+
+        private async Task CleanupOrphanedDownloadsAsync(string libraryPath)
+        {
+            foreach (var (folder, isAudio) in new[] { (Path.Combine(libraryPath, "Audio"), true), (Path.Combine(libraryPath, "Video"), false) })
+            {
+                if (!Directory.Exists(folder)) continue;
+
+                // Clean .part files
+                foreach (var f in Directory.GetFiles(folder, "*.part"))
+                {
+                    try { File.Delete(f); } catch { }
+                }
+
+                // Clean orphaned files (yt-dlp output never renamed or recorded to DB)
+                foreach (var f in Directory.GetFiles(folder))
+                {
+                    try
+                    {
+                        var nameNoExt = Path.GetFileNameWithoutExtension(f);
+                        var match = System.Text.RegularExpressions.Regex.Match(nameNoExt, @"_youtube_([a-zA-Z0-9_-]{11})$|^([a-zA-Z0-9_-]{11})$");
+                        if (!match.Success) continue;
+
+                        var ytId = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+                        bool exists;
+                        if (isAudio)
+                            exists = await _audioService.GetAudioByYoutubeIDAsync(ytId) != null;
+                        else
+                            exists = await _videoService.GetVideoByYoutubeIDAsync(ytId) != null;
+
+                        if (!exists)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"Cleaning up orphaned file: {f}");
+                            File.Delete(f);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+
         private CancellationTokenSource? _statusCts;
         private CancellationTokenSource? _youtubeStatusCts;
+        private CancellationTokenSource? _downloadCts;
+        private string _currentDownloadProgress = string.Empty;
 
         public string StatusMessage
         {
@@ -332,6 +426,7 @@ namespace Autonomuse.ViewModels
             if (IsYoutubeDownloading) return;
             IsYoutubeDownloading = true;
 
+            _downloadCts = new CancellationTokenSource();
             try
             {
                 if (string.IsNullOrWhiteSpace(YoutubeUrl))
@@ -353,9 +448,9 @@ namespace Autonomuse.ViewModels
 
                 YoutubeDownloadResult result;
                 if (isAudio)
-                    result = await _youtubeService.DownloadAudioAsync(YoutubeUrl, msg => YoutubeStatusMessage = $"PROGRESS: {msg}", LoadOrganizationOptionsAsync, SelectedOrganizationGuid);
+                    result = await _youtubeService.DownloadAudioAsync(YoutubeUrl, OnDownloadProgress, LoadOrganizationOptionsAsync, SelectedOrganizationGuid, ct: _downloadCts.Token);
                 else
-                    result = await _youtubeService.DownloadVideoAsync(YoutubeUrl, msg => YoutubeStatusMessage = $"PROGRESS: {msg}", LoadOrganizationOptionsAsync, SelectedOrganizationGuid);
+                    result = await _youtubeService.DownloadVideoAsync(YoutubeUrl, OnDownloadProgress, LoadOrganizationOptionsAsync, SelectedOrganizationGuid, ct: _downloadCts.Token);
                 
                 if (result.Failures != null && result.Failures.Any())
                 {
@@ -385,6 +480,10 @@ namespace Autonomuse.ViewModels
                 else if (result.Duplicate > 0) YoutubeStatusMessage = $"WARN: {summary}";
                 else YoutubeStatusMessage = $"SUCCESS: {summary}";
             }
+            catch (OperationCanceledException)
+            {
+                YoutubeStatusMessage = "INFO: Download cancelled by user.";
+            }
             catch (Exception ex)
             {
                 YoutubeStatusMessage = $"ERROR: Download failed: {ex.Message}";
@@ -392,9 +491,25 @@ namespace Autonomuse.ViewModels
             finally
             {
                 IsYoutubeDownloading = false;
+                _downloadCts?.Dispose();
+                _downloadCts = null;
                 YoutubeUrl = string.Empty;
+                OnPropertyChanged(nameof(IsYoutubeDownloading));
             }
         }
+
+        public void CancelDownload()
+        {
+            _downloadCts?.Cancel();
+        }
+
+        private void OnDownloadProgress(string msg)
+        {
+            _currentDownloadProgress = msg;
+            YoutubeStatusMessage = $"PROGRESS: {msg}";
+        }
+
+        public string CurrentDownloadProgress => _currentDownloadProgress;
 
         public void DismissYoutubeStatus()
         {

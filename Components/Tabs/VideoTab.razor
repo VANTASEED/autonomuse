@@ -1,6 +1,8 @@
+@implements IAsyncDisposable
 @using Autonomuse.Domain.Entities
 @using Autonomuse.Shared.Contracts
 @using Autonomuse.Shared.Utilities
+@using Microsoft.JSInterop
 @inject IVideoService VideoService
 @inject ISettingsService SettingsService
 @inject VideoWatchService WatchService
@@ -58,8 +60,10 @@
                     {
                         <div class="confirm-group">
                             <span class="confirm-text">Delete @_selectedGuids.Count items?</span>
-                            <button class="action-btn danger-btn" @onclick="ConfirmDeleteSelectedAsync">Confirm</button>
-                            <button class="action-btn select-audio" @onclick="() => _showDeleteConfirm = false">Cancel</button>
+                            <div class="confirm-buttons">
+                                <button class="action-btn danger-btn" @onclick="ConfirmDeleteSelectedAsync">Confirm</button>
+                                <button class="action-btn select-audio" @onclick="() => _showDeleteConfirm = false">Cancel</button>
+                            </div>
                         </div>
                     }
                     else
@@ -98,7 +102,9 @@
                                     <li><strong>artist</strong> filter by creator/artist (e.g. <code>daft_punk</code>)</li>
                                     <li><strong>genre</strong> filter by genre (e.g. <code>entertainment</code>)</li>
                                     <li><strong>year</strong> filter by year (e.g. <code>2025</code>)</li>
-                                    <li><strong>title</strong> filter by video title</li>
+                                        <li><strong>title</strong> filter by video title</li>
+                                        <li><strong>original_title</strong> filter by original title (before enrichment)</li>
+                                        <li><strong>original_artist</strong> filter by original artist (before enrichment)</li>
                                 </ul>
                                 <p class="tooltip-example">Example: <code>artist:daft_punk, year:2025</code></p>
                             </div>
@@ -224,11 +230,12 @@
             else
             {
                 <div class="video-cards-grid @(_isSelectionMode ? "selection-mode" : "")">
-                    @foreach (var record in FilteredRecords)
+                    @foreach (var record in DisplayedRecords)
                     {
                         var thumbUrl = !string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath) 
                             ? _thumbnails.TryGetValue(record.GUID, out var url) ? url : "images/Assets/empty_thumbnail.png"
                             : "images/Assets/empty_thumbnail.png";
+                        if (!_thumbnails.ContainsKey(record.GUID)) _ = LoadThumbnailAsync(record);
                             
                         var rawTitle = string.IsNullOrEmpty(record.AlternativeTitle) ? record.Title : record.AlternativeTitle;
                         var displayTitle = FilePathSanitizer.SterilizeTitle(rawTitle, _sterilizationTags);
@@ -331,6 +338,7 @@
                         </div>
                     }
                 </div>
+                <div id="video-scroll-sentinel"></div>
             }
         </div>
         }
@@ -361,154 +369,232 @@
         <div class="modal-backdrop" @onclick="CloseMetadataEdit">
             <div class="modal-card metadata-modal glass-card" @onclick:stopPropagation>
                 <div class="modal-header">
-                    <h3>Metadata Details</h3>
+                    <div class="modal-tab-pills">
+                        <button class="modal-tab-btn @(_activeMetadataTab == "current" ? "active" : "")" @onclick='() => _activeMetadataTab = "current"'>
+                            Current Metadata
+                        </button>
+                        <button class="modal-tab-btn @(_activeMetadataTab == "original" ? "active" : "")" @onclick='() => _activeMetadataTab = "original"'>
+                            Original Data
+                        </button>
+                    </div>
+                    <button class="close-btn" @onclick="CloseMetadataEdit">×</button>
                 </div>
-                <div class="modal-body modal-columns">
-                    <div class="column-left">
-                        <div class="vhs-preview-card">
-                            <div class="vhs-tape-wrapper-modal">
-                                <div class="vhs-tape-inner-modal">
-                                    <img class="vhs-tape-img" src="images/Assets/vhs_tape.png" alt="VHS Tape" />
-                                    <img class="vhs-tape-label" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _editCoverArtBase64)" alt="Tape Label" />
+
+                @if (_activeMetadataTab == "current")
+                {
+                    <div class="modal-body modal-columns">
+                        <div class="column-left">
+                            <div class="vhs-preview-card">
+                                <div class="vhs-tape-wrapper-modal">
+                                    <div class="vhs-tape-inner-modal">
+                                        <img class="vhs-tape-img" src="images/Assets/vhs_tape.png" alt="VHS Tape" />
+                                        <img class="vhs-tape-label" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _editCoverArtBase64)" alt="Tape Label" />
+                                    </div>
+                                </div>
+                                <div class="vhs-sleeve-container-modal">
+                                    <img class="vhs-sleeve-thumb" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _editCoverArtBase64)" alt="Tape Sleeve" />
                                 </div>
                             </div>
-                            <div class="vhs-sleeve-container-modal">
-                                <img class="vhs-sleeve-thumb" src="@(string.IsNullOrEmpty(_editCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _editCoverArtBase64)" alt="Tape Sleeve" />
+                        </div>
+                        <div class="column-right">
+                            <!-- Editable Fields Grid -->
+                            <div class="editable-grid">
+                                <!-- Title -->
+                                <div class="tech-item full-width editable-meta-item">
+                                    <span class="tech-label">Title</span>
+                                    <div class="editable-val-container">
+                                        @if (_editingTitleMode)
+                                        {
+                                            <input type="text" class="form-input inline-edit" @bind="_editTitle" @onblur="() => _editingTitleMode = false" @onkeydown="OnTitleKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => _editingTitleMode = true">@(string.IsNullOrEmpty(_editTitle) ? "N/A" : _editTitle)</span>
+                                            <button class="pencil-btn" @onclick="() => _editingTitleMode = true">✎</button>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Artist (Director) -->
+                                <div class="tech-item editable-meta-item">
+                                    <span class="tech-label">Artist / Creator</span>
+                                    <div class="editable-val-container">
+                                        @if (_editingArtistMode)
+                                        {
+                                            <input type="text" class="form-input inline-edit" @bind="_editArtist" @onblur="() => _editingArtistMode = false" @onkeydown="OnArtistKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => _editingArtistMode = true">@(string.IsNullOrEmpty(_editArtist) ? "N/A" : _editArtist)</span>
+                                            <button class="pencil-btn" @onclick="() => _editingArtistMode = true">✎</button>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Genre -->
+                                <div class="tech-item editable-meta-item">
+                                    <span class="tech-label">Genre</span>
+                                    <div class="editable-val-container">
+                                        @if (_editingGenreMode)
+                                        {
+                                            <input type="text" class="form-input inline-edit" @bind="_editGenre" @onblur="() => _editingGenreMode = false" @onkeydown="OnGenreKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => _editingGenreMode = true">@(string.IsNullOrEmpty(_editGenre) ? "N/A" : _editGenre)</span>
+                                            <button class="pencil-btn" @onclick="() => _editingGenreMode = true">✎</button>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Year -->
+                                <div class="tech-item editable-meta-item">
+                                    <span class="tech-label">Year</span>
+                                    <div class="editable-val-container">
+                                        @if (_editingYearMode)
+                                        {
+                                            <input type="number" class="form-input inline-edit" @bind="_editYear" min="1000" max="3000" @onblur="() => _editingYearMode = false" @onkeydown="OnYearKeyDown" autofocus />
+                                        }
+                                        else
+                                        {
+                                            <span class="tech-val" @onclick="() => _editingYearMode = true">@(_editYear.HasValue ? _editYear.Value.ToString() : "N/A")</span>
+                                            <button class="pencil-btn" @onclick="() => _editingYearMode = true">✎</button>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Cover Art / Thumbnail Upload -->
+                                <div class="tech-item full-width editable-meta-item">
+                                    <span class="tech-label">Thumbnail Image</span>
+                                    <div class="file-upload-wrapper inline-upload" @onclick="PickCoverArtNativeAsync">
+                                        <span class="file-upload-btn">Choose Image</span>
+                                        <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Technical Read-only Fields Grid -->
+                            <div class="technical-metadata-section">
+                                <div class="tech-grid-4">
+                                    <div class="tech-item">
+                                        <span class="tech-label">Source</span>
+                                        <span class="tech-val">@_editMetadataRecord.Source</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">YouTube ID</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.YoutubeID) ? "N/A" : _editMetadataRecord.YoutubeID)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Format</span>
+                                        <span class="tech-val">@_editMetadataRecord.Extension.ToUpper().TrimStart('.')</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">File Size</span>
+                                        <span class="tech-val">@FormatFileSize(_editMetadataRecord.FileSize)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Duration</span>
+                                        <span class="tech-val">@FormatDuration(_editMetadataRecord.Duration)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Resolution</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.Resolution) ? "N/A" : _editMetadataRecord.Resolution)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Audio Bitrate</span>
+                                        <span class="tech-val">@(_editMetadataRecord.Bitrate.HasValue ? $"{_editMetadataRecord.Bitrate} kbps" : "N/A")</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Audio Channels</span>
+                                        <span class="tech-val">@(_editMetadataRecord.Channels.HasValue ? (_editMetadataRecord.Channels == 2 ? "Stereo" : "Mono") : "N/A")</span>
+                                    </div>
+                                    <div class="tech-item span-4">
+                                        <span class="tech-label">File Path</span>
+                                        <span class="tech-val" title="@_editMetadataRecord.FilePath">@_editMetadataRecord.FilePath</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="column-right">
-                        <!-- Editable Fields Grid -->
-                        <div class="editable-grid">
-                            <!-- Title -->
-                            <div class="tech-item full-width editable-meta-item">
-                                <span class="tech-label">Title</span>
-                                <div class="editable-val-container">
-                                    @if (_editingTitleMode)
-                                    {
-                                        <input type="text" class="form-input inline-edit" @bind="_editTitle" @onblur="() => _editingTitleMode = false" @onkeydown="OnTitleKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => _editingTitleMode = true">@(string.IsNullOrEmpty(_editTitle) ? "N/A" : _editTitle)</span>
-                                        <button class="pencil-btn" @onclick="() => _editingTitleMode = true">✎</button>
-                                    }
+                }
+                else
+                {
+                    <div class="modal-body modal-columns">
+                        <div class="column-left">
+                            <div class="vhs-preview-card">
+                                <div class="vhs-tape-wrapper-modal">
+                                    <div class="vhs-tape-inner-modal">
+                                        <img class="vhs-tape-img" src="images/Assets/vhs_tape.png" alt="VHS Tape" />
+                                        <img class="vhs-tape-label" src="@(string.IsNullOrEmpty(_originalCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _originalCoverArtBase64)" alt="Tape Label" />
+                                    </div>
                                 </div>
-                            </div>
-
-                            <!-- Artist (Director) -->
-                            <div class="tech-item editable-meta-item">
-                                <span class="tech-label">Artist / Creator</span>
-                                <div class="editable-val-container">
-                                    @if (_editingArtistMode)
-                                    {
-                                        <input type="text" class="form-input inline-edit" @bind="_editArtist" @onblur="() => _editingArtistMode = false" @onkeydown="OnArtistKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => _editingArtistMode = true">@(string.IsNullOrEmpty(_editArtist) ? "N/A" : _editArtist)</span>
-                                        <button class="pencil-btn" @onclick="() => _editingArtistMode = true">✎</button>
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Genre -->
-                            <div class="tech-item editable-meta-item">
-                                <span class="tech-label">Genre</span>
-                                <div class="editable-val-container">
-                                    @if (_editingGenreMode)
-                                    {
-                                        <input type="text" class="form-input inline-edit" @bind="_editGenre" @onblur="() => _editingGenreMode = false" @onkeydown="OnGenreKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => _editingGenreMode = true">@(string.IsNullOrEmpty(_editGenre) ? "N/A" : _editGenre)</span>
-                                        <button class="pencil-btn" @onclick="() => _editingGenreMode = true">✎</button>
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Year -->
-                            <div class="tech-item editable-meta-item">
-                                <span class="tech-label">Year</span>
-                                <div class="editable-val-container">
-                                    @if (_editingYearMode)
-                                    {
-                                        <input type="number" class="form-input inline-edit" @bind="_editYear" min="1000" max="3000" @onblur="() => _editingYearMode = false" @onkeydown="OnYearKeyDown" autofocus />
-                                    }
-                                    else
-                                    {
-                                        <span class="tech-val" @onclick="() => _editingYearMode = true">@(_editYear.HasValue ? _editYear.Value.ToString() : "N/A")</span>
-                                        <button class="pencil-btn" @onclick="() => _editingYearMode = true">✎</button>
-                                    }
-                                </div>
-                            </div>
-
-                            <!-- Cover Art / Thumbnail Upload -->
-                            <div class="tech-item full-width editable-meta-item">
-                                <span class="tech-label">Thumbnail Image</span>
-                                <div class="file-upload-wrapper inline-upload" @onclick="PickCoverArtNativeAsync">
-                                    <span class="file-upload-btn">Choose Image</span>
-                                    <span class="file-name-label">@(_uploadedCoverArtFileName != "" ? _uploadedCoverArtFileName : (!string.IsNullOrEmpty(_editCoverArtPath) ? System.IO.Path.GetFileName(_editCoverArtPath) : "No file chosen"))</span>
+                                <div class="vhs-sleeve-container-modal">
+                                    <img class="vhs-sleeve-thumb" src="@(string.IsNullOrEmpty(_originalCoverArtBase64) ? "images/Assets/empty_thumbnail.png" : _originalCoverArtBase64)" alt="Original Thumbnail" />
                                 </div>
                             </div>
                         </div>
-
-                        <!-- Technical Read-only Fields Grid -->
-                        <div class="technical-metadata-section">
-                            <div class="tech-grid-4">
-                                <div class="tech-item">
-                                    <span class="tech-label">Source</span>
-                                    <span class="tech-val">@_editMetadataRecord.Source</span>
+                        <div class="column-right">
+                            @if (_originalMetadataBackup != null)
+                            {
+                                <div class="editable-grid">
+                                    <div class="tech-item full-width">
+                                        <span class="tech-label">Original Title</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.AlternativeTitle) ? "N/A" : _originalMetadataBackup.AlternativeTitle)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Original Artist</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.Artist) ? "N/A" : _originalMetadataBackup.Artist)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Original Genre</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.Genre) ? "N/A" : _originalMetadataBackup.Genre)</span>
+                                    </div>
+                                    <div class="tech-item">
+                                        <span class="tech-label">Original Year</span>
+                                        <span class="tech-val">@(_originalMetadataBackup.Year.HasValue ? _originalMetadataBackup.Year.Value.ToString() : "N/A")</span>
+                                    </div>
+                                    <div class="tech-item full-width">
+                                        <span class="tech-label">Original Thumbnail Path</span>
+                                        <span class="tech-val">@(string.IsNullOrEmpty(_originalMetadataBackup.ThumbnailPath) ? "N/A" : _originalMetadataBackup.ThumbnailPath)</span>
+                                    </div>
+                                    <div class="tech-item full-width">
+                                        <span class="tech-label">Backup Ingested At</span>
+                                        <span class="tech-val">@_originalMetadataBackup.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</span>
+                                    </div>
                                 </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">YouTube ID</span>
-                                    <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.YoutubeID) ? "N/A" : _editMetadataRecord.YoutubeID)</span>
+                            }
+                            else
+                            {
+                                <div class="original-empty-banner">
+                                    <p>No original backup recorded for this video. This video is currently in its original ingested state.</p>
                                 </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Format</span>
-                                    <span class="tech-val">@_editMetadataRecord.Extension.ToUpper().TrimStart('.')</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">File Size</span>
-                                    <span class="tech-val">@FormatFileSize(_editMetadataRecord.FileSize)</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Duration</span>
-                                    <span class="tech-val">@FormatDuration(_editMetadataRecord.Duration)</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Resolution</span>
-                                    <span class="tech-val">@(string.IsNullOrEmpty(_editMetadataRecord.Resolution) ? "N/A" : _editMetadataRecord.Resolution)</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Audio Bitrate</span>
-                                    <span class="tech-val">@(_editMetadataRecord.Bitrate.HasValue ? $"{_editMetadataRecord.Bitrate} kbps" : "N/A")</span>
-                                </div>
-                                <div class="tech-item">
-                                    <span class="tech-label">Audio Channels</span>
-                                    <span class="tech-val">@(_editMetadataRecord.Channels.HasValue ? (_editMetadataRecord.Channels == 2 ? "Stereo" : "Mono") : "N/A")</span>
-                                </div>
-                                <div class="tech-item span-4">
-                                    <span class="tech-label">File Path</span>
-                                    <span class="tech-val" title="@_editMetadataRecord.FilePath">@_editMetadataRecord.FilePath</span>
-                                </div>
-                            </div>
+                            }
                         </div>
                     </div>
-                </div>
+                }
                 <div class="modal-footer">
-                    <button class="action-btn select-audio" @onclick="CloseMetadataEdit" disabled="@_isSavingMetadata">Cancel</button>
-                    <button class="action-btn" @onclick="SaveMetadataChangesAsync" disabled="@_isSavingMetadata">
-                        @if (_isSavingMetadata)
-                        {
-                            <span class="btn-spinner mini"></span> @(" Saving...")
-                        }
-                        else
-                        {
-                            @("Save Changes")
-                        }
-                    </button>
+                    @if (_activeMetadataTab == "original")
+                    {
+                        <button class="action-btn select-audio" @onclick="CloseMetadataEdit">Close</button>
+                    }
+                    else if (IsRecordLocked(_editMetadataRecord!))
+                    {
+                        <button class="action-btn select-audio" @onclick="CloseMetadataEdit">Close</button>
+                    }
+                    else
+                    {
+                        <button class="action-btn select-audio" @onclick="CloseMetadataEdit" disabled="@_isSavingMetadata">Cancel</button>
+                        <button class="action-btn" @onclick="SaveMetadataChangesAsync" disabled="@_isSavingMetadata">
+                            @if (_isSavingMetadata)
+                            {
+                                <span class="btn-spinner mini"></span> @(" Saving...")
+                            }
+                            else
+                            {
+                                @("Save Changes")
+                            }
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -563,6 +649,11 @@
     private string? _editCoverArtPath = null;
     private string? _editCoverArtBase64 = null;
     
+    // Current/Original toggle
+    private string _activeMetadataTab = "current";
+    private VideoBackup? _originalMetadataBackup;
+    private string? _originalCoverArtBase64;
+
     // Inline edit triggers
     private bool _editingTitleMode = false;
     private bool _editingArtistMode = false;
@@ -576,6 +667,11 @@
     private bool _isSavingMetadata = false;
 
     private List<VideoRecord> FilteredRecords => _filteredRecords;
+    private int _displayCount = 50;
+    private const int PageSize = 50;
+    private DotNetObjectReference<VideoTab>? _dotNetRef;
+    private List<VideoRecord> DisplayedRecords => _filteredRecords.Take(_displayCount).ToList();
+    private bool HasMoreRecords => _displayCount < _filteredRecords.Count;
 
     protected override async Task OnInitializedAsync()
     {
@@ -604,6 +700,7 @@
             _playlistItems.Clear();
             _guidsInAnyPlaylist = await VideoService.GetVideoGuidsInAnyPlaylistAsync();
         }
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -629,6 +726,7 @@
     {
         _selectedSort = sort;
         _isSortDropdownOpen = false;
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -647,6 +745,7 @@
     private async Task ToggleSortDirection()
     {
         _isSortAscending = !_isSortAscending;
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -707,6 +806,8 @@
                     "genre" => results.Where(r => (r.Genre ?? "").ToLower().Contains(value)),
                     "year" => results.Where(r => r.Year?.ToString() == value),
                     "title" => results.Where(r => r.Title.ToLower().Contains(value) || (r.AlternativeTitle ?? "").ToLower().Contains(value)),
+                    "original_title" => results.Where(r => r.Title.ToLower().Contains(value)),
+                    "original_artist" => results.Where(r => (r.Artist ?? "").ToLower().Contains(value)),
                     _ => results
                 };
             }
@@ -739,6 +840,11 @@
         StateHasChanged();
     }
 
+    private async Task RefreshDisplayAsync()
+    {
+        await ApplyFiltersAsync();
+    }
+
     private string GetSortTitle(VideoRecord r) => string.IsNullOrEmpty(r.AlternativeTitle) ? r.Title : r.AlternativeTitle;
 
     private int GetSortGroup(string? text)
@@ -750,12 +856,14 @@
 
     private async Task PerformSearch()
     {
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
     private async Task ClearSearch()
     {
         _searchQuery = "";
+        _displayCount = PageSize;
         await ApplyFiltersAsync();
     }
 
@@ -768,10 +876,29 @@
     }
 
     // Selection mode operations
-    private void TogglePlaylistManager()
+    private async Task TogglePlaylistManager()
     {
         _showPlaylistManager = !_showPlaylistManager;
         _showWatchManager = false;
+        if (!_showPlaylistManager)
+        {
+            _playlists = await VideoService.GetPlaylistsAsync();
+            _guidsInAnyPlaylist = await VideoService.GetVideoGuidsInAnyPlaylistAsync();
+            if (!string.IsNullOrEmpty(_selectedPlaylistId) && _selectedPlaylistId != "any-playlist" && _selectedPlaylistId != "none-playlist")
+            {
+                if (!_playlists.Any(p => p.GUID == _selectedPlaylistId))
+                {
+                    _selectedPlaylistId = null;
+                    _selectedPlaylistName = "All Videos";
+                    _playlistItems.Clear();
+                }
+                else
+                {
+                    _playlistItems = await VideoService.GetVideoInPlaylistAsync(_selectedPlaylistId);
+                }
+            }
+            await ApplyFiltersAsync();
+        }
         StateHasChanged();
     }
 
@@ -835,7 +962,7 @@
             _selectedGuids.Add(guid);
     }
 
-    private void HandleCardClick(VideoRecord record)
+    private async Task HandleCardClick(VideoRecord record)
     {
         if (_isSelectionMode)
         {
@@ -843,7 +970,7 @@
         }
         else
         {
-            OpenMetadataEdit(record);
+            await OpenMetadataEditAsync(record);
         }
     }
 
@@ -858,7 +985,8 @@
         }
         _selectedGuids.Clear();
         _isSelectionMode = false;
-        await LoadVideoRecordsAsync();
+        foreach (var r in toLock) _thumbnails.Remove(r.GUID);
+        await RefreshDisplayAsync();
     }
 
     private async Task UnlockSelectedAsync()
@@ -872,7 +1000,8 @@
         }
         _selectedGuids.Clear();
         _isSelectionMode = false;
-        await LoadVideoRecordsAsync();
+        foreach (var r in toUnlock) _thumbnails.Remove(r.GUID);
+        await RefreshDisplayAsync();
     }
 
     private async Task ConfirmDeleteSelectedAsync()
@@ -954,16 +1083,17 @@
     }
 
     // Modal view & edit operations
-    private void OpenMetadataEdit(VideoRecord record)
+    private async Task OpenMetadataEditAsync(VideoRecord record)
     {
         _openMenuGuid = null;
+        _activeMetadataTab = "current";
         _editMetadataRecord = record;
         _editTitle = record.AlternativeTitle ?? record.Title;
         _editArtist = record.Artist ?? "";
         _editGenre = record.Genre ?? "";
         _editYear = record.Year;
         _editCoverArtPath = record.ThumbnailPath;
-        
+
         _editingTitleMode = false;
         _editingArtistMode = false;
         _editingGenreMode = false;
@@ -972,6 +1102,7 @@
         _hasNewCoverArtUploaded = false;
         _uploadedCoverArtBytes = null;
         _uploadedCoverArtFileName = "";
+        _isSavingMetadata = false;
 
         if (!string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath))
         {
@@ -980,6 +1111,49 @@
         else
         {
             _editCoverArtBase64 = null;
+        }
+
+        // Fetch backup for original data tab
+        _originalMetadataBackup = await VideoService.GetVideoBackupAsync(record.GUID);
+        _originalCoverArtBase64 = null;
+
+        if (_originalMetadataBackup != null)
+        {
+            try
+            {
+                var libraryPath = await SettingsService.GetSettingAsync("LibraryPath");
+                string? backupArtPath = null;
+                if (!string.IsNullOrEmpty(libraryPath))
+                {
+                    var backupFolder = System.IO.Path.Combine(libraryPath, "Art", "VideoBackup");
+                    var candidatePath = System.IO.Path.Combine(backupFolder, $"{record.GUID}.jpg");
+                    if (System.IO.File.Exists(candidatePath))
+                    {
+                        backupArtPath = candidatePath;
+                    }
+                }
+                if (string.IsNullOrEmpty(backupArtPath) && !string.IsNullOrEmpty(_originalMetadataBackup.ThumbnailPath) && System.IO.File.Exists(_originalMetadataBackup.ThumbnailPath))
+                {
+                    backupArtPath = _originalMetadataBackup.ThumbnailPath;
+                }
+
+                if (!string.IsNullOrEmpty(backupArtPath) && System.IO.File.Exists(backupArtPath))
+                {
+                    var bytes = await System.IO.File.ReadAllBytesAsync(backupArtPath);
+                    var ext = System.IO.Path.GetExtension(backupArtPath).ToLowerInvariant();
+                    var mime = ext switch
+                    {
+                        ".png" => "image/png",
+                        ".webp" => "image/webp",
+                        _ => "image/jpeg"
+                    };
+                    _originalCoverArtBase64 = $"data:{mime};base64,{Convert.ToBase64String(bytes)}";
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load original backup thumbnail: {ex.Message}");
+            }
         }
     }
 
@@ -1060,7 +1234,8 @@
             await VideoService.UpdatePhysicalTagsAsync(record);
 
             _editMetadataRecord = null;
-            await LoadVideoRecordsAsync();
+            _thumbnails.Remove(record.GUID);
+            await RefreshDisplayAsync();
         }
         catch (Exception ex)
         {
@@ -1120,23 +1295,7 @@
             }
 
             _videoRecords = await VideoService.GetAllVideosAsync();
-            
             _thumbnails.Clear();
-            foreach(var record in _videoRecords)
-            {
-                if (!string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath))
-                {
-                    try
-                    {
-                        var bytes = await System.IO.File.ReadAllBytesAsync(record.ThumbnailPath);
-                        _thumbnails[record.GUID] = $"data:image/jpeg;base64,{Convert.ToBase64String(bytes)}";
-                    }
-                    catch
-                    {
-                        _thumbnails[record.GUID] = "images/Assets/empty_thumbnail.png";
-                    }
-                }
-            }
             await ApplyFiltersAsync();
         }
         catch (Exception ex)
@@ -1224,7 +1383,8 @@
             record.MetadataStatus = 10 + record.MetadataStatus;
         }
         await VideoService.UpdateVideoRecordAsync(record);
-        await LoadVideoRecordsAsync();
+        _thumbnails.Remove(record.GUID);
+        await RefreshDisplayAsync();
     }
 
     private async Task ResetMetadataAsync(VideoRecord record)
@@ -1269,7 +1429,7 @@
             }
 
             record.AlternativeTitle = backup.AlternativeTitle;
-            record.Title = backup.AlternativeTitle ?? record.FileName;
+            record.Title = backup.AlternativeTitle ?? record.Title;
             record.Artist = backup.Artist;
             record.Genre = backup.Genre;
             record.Year = backup.Year;
@@ -1278,7 +1438,8 @@
             await VideoService.UpdateVideoRecordAsync(record);
             await VideoService.UpdatePhysicalTagsAsync(record);
             await VideoService.DeleteVideoBackupAsync(record.GUID);
-            await LoadVideoRecordsAsync();
+            _thumbnails.Remove(record.GUID);
+            await RefreshDisplayAsync();
         }
         catch (Exception ex)
         {
@@ -1296,7 +1457,7 @@
             var backup = new VideoBackup
             {
                 GUID = record.GUID,
-                AlternativeTitle = record.AlternativeTitle,
+                AlternativeTitle = record.AlternativeTitle ?? record.Title,
                 Artist = record.Artist,
                 Genre = record.Genre,
                 Year = record.Year,
@@ -1353,5 +1514,50 @@
     {
         if (!seconds.HasValue || seconds.Value <= 0) return "N/A";
         return TimeSpan.FromSeconds(seconds.Value).ToString(@"hh\:mm\:ss");
+    }
+
+    private async Task LoadThumbnailAsync(VideoRecord record)
+    {
+        if (!string.IsNullOrEmpty(record.ThumbnailPath) && System.IO.File.Exists(record.ThumbnailPath))
+        {
+            try
+            {
+                var bytes = await System.IO.File.ReadAllBytesAsync(record.ThumbnailPath);
+                _thumbnails[record.GUID] = $"data:image/jpeg;base64,{Convert.ToBase64String(bytes)}";
+            }
+            catch
+            {
+                _thumbnails[record.GUID] = "images/Assets/empty_thumbnail.png";
+            }
+        }
+        else
+        {
+            _thumbnails[record.GUID] = "images/Assets/empty_thumbnail.png";
+        }
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (HasMoreRecords)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("setupInfiniteScroll", "video-scroll-sentinel", _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public async Task LoadMore()
+    {
+        if (!HasMoreRecords) return;
+        _displayCount += PageSize;
+        StateHasChanged();
+        await JSRuntime.InvokeVoidAsync("setupInfiniteScroll", "video-scroll-sentinel", _dotNetRef);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("teardownInfiniteScroll");
+        _dotNetRef?.Dispose();
     }
 }

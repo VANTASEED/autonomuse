@@ -284,6 +284,18 @@
     transform: translateY(-1px);
 }
 
+.tool-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.pill-button.outline {
+    background: transparent;
+    border: 1px solid var(--accent-base);
+    color: var(--accent-base);
+}
+
 .pill-button.mini {
     padding: 6px 15px;
     font-size: 0.75rem;
@@ -1007,3 +1019,63 @@ input[type="range"] {
 .tool-update-status .status-close-btn:hover {
     color: #fff;
 }
+
+/* ===== YouTube Quality Settings Card Styling ===== */
+.quality-settings-row {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+    width: 100%;
+}
+
+.quality-setting-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.setting-sub-label {
+    font-size: 0.7rem;
+    color: inherit;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+.changelog-modal {
+    width: 560px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+.changelog-body {
+    overflow-y: auto;
+    max-height: 60vh;
+    padding: 1rem 0;
+    line-height: 1.6;
+    font-size: 0.9rem;
+}
+.changelog-body h1 { font-size: 1.2rem; color: var(--accent-base); margin: 0 0 0.5rem; }
+.changelog-body h2 { font-size: 1rem; color: var(--accent-base); margin: 1rem 0 0.25rem; }
+.changelog-body ul { margin: 0.25rem 0; padding-left: 1.2rem; }
+.changelog-body li { margin: 0.15rem 0; }
+.changelog-body hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 0.75rem 0; }
+.modal-backdrop {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 2000;
+}
+.modal-card {
+    background: var(--card-bg, rgba(18,18,18,0.4));
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; padding: 1.8rem;
+}
+.modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem; }
+.modal-header h3 { margin: 0; color: var(--accent-base); font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; }
+.modal-footer { display: flex; justify-content: flex-end; padding-top: 1rem; }
+.changelog-footer { padding-top: 1rem; }
+.changelog-btn { width: 100%; text-align: center; justify-content: center; }

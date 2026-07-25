@@ -1,6 +1,7 @@
 @using Autonomuse.Domain.Entities
 @using Autonomuse.Shared.Contracts
 @inject IAudioService AudioService
+@inject AudioWatchService WatchService
 
 <div class="playlist-manager">
     <div class="manager-controls glass-card">
@@ -18,10 +19,13 @@
                     <div class="playlist-item @(_selectedPlaylist?.GUID == playlist.GUID ? "active" : "")"
                          @onclick="() => SelectPlaylist(playlist)" @key="playlist.GUID">
                         <span class="playlist-name">@playlist.Name</span>
-                        @if (_selectedPlaylist?.GUID == playlist.GUID)
-                        {
-                            <span class="playlist-count">@_selectedPlaylistCount</span>
-                        }
+                        <div class="playlist-item-right" @onclick:stopPropagation>
+                            @if (_selectedPlaylist?.GUID == playlist.GUID)
+                            {
+                                <span class="playlist-count">@_selectedPlaylistCount</span>
+                            }
+                            <button class="delete-playlist-btn" @onclick="() => PromptDeletePlaylist(playlist)" title="Delete Playlist">×</button>
+                        </div>
                     </div>
                 }
                 @if (!_playlists.Any())
@@ -94,6 +98,28 @@
             </div>
         </div>
     </div>
+
+    @if (_showDeleteConfirmation)
+    {
+        <div class="modal-backdrop">
+            <div class="delete-confirmation-modal glass-card">
+                <h4>Delete Playlist</h4>
+                <p>Are you sure you want to delete the playlist "<strong>@_playlistToDelete?.Name</strong>"?</p>
+                <div class="confirmation-details">
+                    <p>The playlist itself will be deleted.</p>
+                    <p>All associated tracks in this playlist will stay in the library (under "No Playlist", unless they belong to another playlist).</p>
+                    @if (_playlistToDeleteIsWatched)
+                    {
+                        <p class="watcher-warning">This playlist is currently on Watcher. Deleting the playlist will also remove it from the Watcher list.</p>
+                    }
+                </div>
+                <div class="modal-actions">
+                    <button class="action-btn danger-btn" @onclick="ConfirmDeletePlaylistAsync">Delete</button>
+                    <button class="action-btn" @onclick="CancelDeletePlaylist">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -106,6 +132,9 @@
     private HashSet<string> _playlistBaselineGuids = new();
     private int _selectedPlaylistCount = 0;
     private Dictionary<string, string> _coverArts = new();
+    private bool _showDeleteConfirmation = false;
+    private MediaPlaylist? _playlistToDelete;
+    private bool _playlistToDeleteIsWatched = false;
 
     // ponytail: batch DB writes on close instead of per-toggle
     private HashSet<string> _pendingAdditions = new();
@@ -234,6 +263,49 @@
         }
         _pendingAdditions.Clear();
         _pendingRemovals.Clear();
+    }
+
+    private async Task PromptDeletePlaylist(MediaPlaylist playlist)
+    {
+        _playlistToDelete = playlist;
+        _playlistToDeleteIsWatched = false;
+        if (!string.IsNullOrEmpty(playlist.Description))
+        {
+            var watched = await WatchService.GetWatchedPlaylistsAsync();
+            _playlistToDeleteIsWatched = watched.Any(w => string.Equals(w.Url, playlist.Description, StringComparison.OrdinalIgnoreCase));
+        }
+        _showDeleteConfirmation = true;
+    }
+
+    private void CancelDeletePlaylist()
+    {
+        _showDeleteConfirmation = false;
+        _playlistToDelete = null;
+        _playlistToDeleteIsWatched = false;
+    }
+
+    private async Task ConfirmDeletePlaylistAsync()
+    {
+        if (_playlistToDelete == null) return;
+
+        // If the selected playlist is deleted, deselect it
+        if (_selectedPlaylist?.GUID == _playlistToDelete.GUID)
+        {
+            _selectedPlaylist = null;
+            _checkedGuids.Clear();
+            _playlistBaselineGuids.Clear();
+            _pendingAdditions.Clear();
+            _pendingRemovals.Clear();
+            _selectedPlaylistCount = 0;
+        }
+
+        await AudioService.DeletePlaylistAsync(_playlistToDelete.GUID);
+        _playlists = await AudioService.GetPlaylistsAsync();
+
+        _showDeleteConfirmation = false;
+        _playlistToDelete = null;
+        _playlistToDeleteIsWatched = false;
+        StateHasChanged();
     }
 
     private async Task SaveAndCloseAsync()

@@ -24,5 +24,6 @@ namespace Autonomuse.Shared.Contracts
         Task CreateVideoBackupAsync(VideoBackup backup);
         Task<VideoBackup?> GetVideoBackupAsync(string guid);
         Task DeleteVideoBackupAsync(string guid);
+        Task DeletePlaylistAsync(string playlistGuid);
     }
 }

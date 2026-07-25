@@ -1,7 +1,7 @@
 [Setup]
 AppName=Autonomuse
 AppVerName=Autonomuse
-AppVersion=1.0.1-launch_updates
+AppVersion=1.1.0-QoL_updates
 AppPublisher=VantaSeed
 AppId={{B0F1A2E3-4D5C-6B7A-8F9E-0D1C2B3A4F5E}
 ArchitecturesAllowed=x64compatible
@@ -27,4 +27,4 @@ Name: "{group}\Uninstall Autonomuse"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\Autonomuse"; Filename: "{app}\Autonomuse.exe"; WorkingDir: "{app}"
 
 [Run]
-Filename: "{app}\Autonomuse.exe"; Description: "Launch Autonomuse"; WorkingDir: "{app}"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\Autonomuse.exe"; Description: "Launch Autonomuse"; WorkingDir: "{app}"; Flags: postinstall nowait

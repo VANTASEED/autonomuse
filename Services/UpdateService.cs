@@ -112,7 +112,7 @@ public static class UpdateService
             Process.Start(new ProcessStartInfo
             {
                 FileName = tempPath,
-                Arguments = "/SILENT /NORESTART",
+                Arguments = "/SILENT",
                 UseShellExecute = true
             });
 

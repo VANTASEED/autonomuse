@@ -1,6 +1,8 @@
 @using Autonomuse.ViewModels
+@using Autonomuse.Shared.Contracts
 @inject SettingViewModel ViewModel
 @inject IJSRuntime JS
+@inject ISettingsService SettingsService
 
 <div class="tab-content">
     <div class="header">
@@ -63,6 +65,71 @@
                     fill out the form, and paste the generated key below. <br />Leave this field empty to use the built-in shared key. Shared key traffic may be rate-limited.
                 </p>
                 <input type="text" class="api-key-input" placeholder="Leave empty to use shared key" @bind="ViewModel.AcoustIdApiKey" @bind:event="oninput" />
+            </div>
+        </div>
+
+        <div class="glass-card full-width">
+            <h2 class="card-title">YouTube Quality Limits</h2>
+            <div class="setting-item">
+                <p class="setting-desc">
+                    Configure the maximum download quality for YouTube audio and video files. Downloads (including background watcher updates) will fetch the highest quality available *under* or equal to your selection.
+                </p>
+                <div class="quality-settings-row">
+                    <div class="quality-setting-col">
+                        <label class="setting-sub-label">Max Audio Quality (KBPS)</label>
+                        <div class="toggle-group full-width mt-1">
+                            <button class="toggle-btn @(ViewModel.PreferredAudioQuality == "320" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredAudioQuality = "320"; }'>
+                                320
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredAudioQuality == "256" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredAudioQuality = "256"; }'>
+                                256
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredAudioQuality == "192" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredAudioQuality = "192"; }'>
+                                192
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredAudioQuality == "128" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredAudioQuality = "128"; }'>
+                                128
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredAudioQuality == "96" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredAudioQuality = "96"; }'>
+                                96
+                            </button>
+                        </div>
+                    </div>
+                    <div class="quality-setting-col">
+                        <label class="setting-sub-label">Max Video Quality</label>
+                        <div class="toggle-group full-width mt-1">
+                            <button class="toggle-btn @(ViewModel.PreferredVideoQuality == "2160" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredVideoQuality = "2160"; }'>
+                                2160p (4K)
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredVideoQuality == "1440" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredVideoQuality = "1440"; }'>
+                                1440p (2K)
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredVideoQuality == "1080" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredVideoQuality = "1080"; }'>
+                                1080p
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredVideoQuality == "720" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredVideoQuality = "720"; }'>
+                                720p
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredVideoQuality == "480" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredVideoQuality = "480"; }'>
+                                480p
+                            </button>
+                            <button class="toggle-btn @(ViewModel.PreferredVideoQuality == "360" ? "active" : "")" 
+                                    @onclick='() => { ViewModel.PreferredVideoQuality = "360"; }'>
+                                360p
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -178,10 +245,13 @@
                                 }
                             </div>
                         </div>
-                        <button class="pill-button @(ViewModel.IsAppUpdateAvailable ? "accent" : "")" disabled="@(ViewModel.IsCheckingAppUpdate)"
-                                @onclick="ViewModel.CheckForAppUpdateAsync">
-                            @(ViewModel.IsCheckingAppUpdate ? "Checking..." : ViewModel.IsAppUpdateAvailable ? "Update" : "Check for Updates")
-                        </button>
+                        <div class="tool-actions">
+                            <button class="pill-button outline" @onclick="ShowChangelogAsync">Changelog</button>
+                            <button class="pill-button @(ViewModel.IsAppUpdateAvailable ? "accent" : "")" disabled="@(ViewModel.IsCheckingAppUpdate)"
+                                    @onclick="ViewModel.CheckForAppUpdateAsync">
+                                @(ViewModel.IsCheckingAppUpdate ? "Checking..." : ViewModel.IsAppUpdateAvailable ? "Update" : "Check for Updates")
+                            </button>
+                        </div>
                     </div>
 
                     <div class="tool-separator"></div>
@@ -693,6 +763,23 @@
             </div>
         </div>
     </div>
+@if (_showChangelog)
+{
+    <div class="modal-backdrop" @onclick="DismissChangelogAsync">
+        <div class="modal-card changelog-modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>What's New</h3>
+            </div>
+            <div class="modal-body changelog-body">
+                @((MarkupString)_changelogHtml)
+            </div>
+            <div class="modal-footer changelog-footer">
+                <button class="action-btn gold changelog-btn" @onclick="DismissChangelogAsync">Got it</button>
+            </div>
+        </div>
+    </div>
+}
+
 </div>
 
 @code {
@@ -784,5 +871,93 @@
         if (rawMessage.StartsWith("INFO: ")) return rawMessage.Substring(6);
         if (rawMessage.StartsWith("INFO:")) return rawMessage.Substring(5);
         return rawMessage;
+    }
+
+    private bool _isAudioQualDropdownOpen;
+    private bool _isVideoQualDropdownOpen;
+
+    private void ToggleAudioQualDropdown()
+    {
+        _isAudioQualDropdownOpen = !_isAudioQualDropdownOpen;
+        if (_isAudioQualDropdownOpen) _isVideoQualDropdownOpen = false;
+    }
+
+    private void ToggleVideoQualDropdown()
+    {
+        _isVideoQualDropdownOpen = !_isVideoQualDropdownOpen;
+        if (_isVideoQualDropdownOpen) _isAudioQualDropdownOpen = false;
+    }
+
+    private void SelectAudioQuality(string value)
+    {
+        ViewModel.PreferredAudioQuality = value;
+        _isAudioQualDropdownOpen = false;
+    }
+
+    private void SelectVideoQuality(string value)
+    {
+        ViewModel.PreferredVideoQuality = value;
+        _isVideoQualDropdownOpen = false;
+    }
+
+    private string GetAudioQualityLabel(string value) => value switch
+    {
+        "320" => "320 kbps (Best)",
+        "256" => "256 kbps",
+        "192" => "192 kbps",
+        "128" => "128 kbps",
+        "96" => "96 kbps (Low)",
+        _ => $"{value} kbps"
+    };
+
+    private string GetVideoQualityLabel(string value) => value switch
+    {
+        "2160" => "2160p (4K)",
+        "1440" => "1440p (2K)",
+        "1080" => "1080p (FHD)",
+        "720" => "720p (HD)",
+        "480" => "480p (SD)",
+        "360" => "360p (Low)",
+        _ => $"{value}p"
+    };
+
+    private bool _showChangelog;
+    private string _changelogHtml = "";
+
+    private async Task ShowChangelogAsync()
+    {
+        try
+        {
+            string text;
+            try
+            {
+                using var stream = await FileSystem.OpenAppPackageFileAsync("CHANGELOG.txt");
+                using var reader = new System.IO.StreamReader(stream);
+                text = await reader.ReadToEndAsync();
+            }
+            catch
+            {
+                var changelogPath = System.IO.Path.Combine(AppContext.BaseDirectory, "CHANGELOG.txt");
+                var dir = AppContext.BaseDirectory;
+                for (int i = 0; i < 6 && !System.IO.File.Exists(changelogPath); i++)
+                {
+                    dir = System.IO.Path.GetDirectoryName(dir);
+                    if (dir == null) break;
+                    changelogPath = System.IO.Path.Combine(dir, "CHANGELOG.txt");
+                }
+                if (!System.IO.File.Exists(changelogPath)) return;
+                text = await System.IO.File.ReadAllTextAsync(changelogPath);
+            }
+            _changelogHtml = Markdig.Markdown.ToHtml(text);
+            _showChangelog = true;
+            StateHasChanged();
+        }
+        catch { }
+    }
+
+    private async Task DismissChangelogAsync()
+    {
+        _showChangelog = false;
+        StateHasChanged();
     }
 }

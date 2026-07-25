@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Autonomuse.Domain.Entities;
 
@@ -24,11 +25,11 @@ namespace Autonomuse.Shared.Contracts
         /// <summary>
         /// Downloads audio from YouTube and adds to library.
         /// </summary>
-        Task<YoutubeDownloadResult> DownloadAudioAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null);
+        Task<YoutubeDownloadResult> DownloadAudioAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null, CancellationToken ct = default);
 
         /// <summary>
         /// Downloads video from YouTube and adds to library.
         /// </summary>
-        Task<YoutubeDownloadResult> DownloadVideoAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null);
+        Task<YoutubeDownloadResult> DownloadVideoAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null, CancellationToken ct = default);
     }
 }

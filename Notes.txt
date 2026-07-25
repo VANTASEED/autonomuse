@@ -2,8 +2,35 @@ future possibility :
 - wireless synchronize by local network
 - offline synchronize via USB. user can connect devices to USB (phone / DAP / external drive), read as file transfer mode. app can select a folder on that device, then synchronize the media files inside between desktop library and device folder library.
 
-dev notes :
-all intended 1.0.0 features has been developed at this points.
+feature 1.1 updates :
+- (ADDED) ability to delete playlist for audio and video, but keep the tracks. tracks from deleted playlist will go to "no playlist", UNLESS its on another playlist.
+- (ADDED) do not showing "unavailable video", either by privated or deleted by youtube (unless connection error), so it doesnt keep showing error because it is unavailable (because it will keep showing error if we sync it).
+- (ADDED) quality selector for video (audio if its possible as well)
+- (ADDED) add original source title and artist onto the filter search for audio and video
+- (ADDED) reset the scroll position to the top when switching tab
+- (ADDED) handling incomplete downloads
+- (ADDED) a way to stop downloads
+- (ADDED) Add new tag status for audio that has been "tried to enrich". So user know which audio that has gone through enrichment process, but failed.
+- (ADDED) infinite scroll load, but make sure the batch select still affect the un-loaded media. so the audio and video do not load very heavy at first.
+- (ADDED) add failed to enrich status dropdown filter
+- (ADDED) changelog ui after updates.
 
-fixing v1.1 :
-- [x] select all function based on filtered result. At the moments it select all items regardless of the filters. (FIXED)
+fix bugs :
+- (FIXED) when one "music A" that is already on "playlist A", and user add "playlist B" that contains "music A" via watcher, "music A" wont be added to the "playlist B" because its already on the library. this probably happens on video tab as well.
+- (FIXED) on metadata details page, current metadata / original data is not following the contrast text color setting
+
+bugs ongoing :
+- (HALF FIXED) fetch ENGLISH title and artist name from youtube if available, and add some "flags" that indicate one track has "original non english" title. if title has this flag, fetch metadata, but keep the english title and name (Sample : Messiah by Alba Sera).
+   + english title still not fetched mainly because the yt-dlp lang=en parameter is not working.
+
+CHANGELOG.txt markdown guide:
+- Version title line, then "---" on the next line → renders as H2 (yellow/gold accent color)
+- Use "- " for bullet points (each bullet is a feature/fix entry)
+- Use blank lines between sections for spacing
+- Example format:
+  v1.1.0 - Feature Updates
+  ---
+  - Reset scroll position to top when switching tabs
+  - Stop download button: cancel ongoing YouTube downloads
+
+

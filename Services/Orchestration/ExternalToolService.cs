@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading;
 using Autonomuse.Shared.Contracts;
 using Microsoft.Maui.Networking;
 
@@ -249,7 +250,7 @@ namespace Autonomuse.Services.Orchestration
             return File.Exists(path) ? "Ready" : "Managed by System";
         }
 
-        public async Task<(int ExitCode, string StandardOutput, string StandardError)> RunCommandAsync(string toolName, string arguments)
+        public async Task<(int ExitCode, string StandardOutput, string StandardError)> RunCommandAsync(string toolName, string arguments, CancellationToken ct = default)
         {
             RefreshEnvironmentPath();
             var path = GetToolPath(toolName);
@@ -266,6 +267,8 @@ namespace Autonomuse.Services.Orchestration
 
             using var process = Process.Start(startInfo);
             if (process == null) return (-1, "", "Failed to start process.");
+
+            using var _ = ct.Register(() => { try { if (!process.HasExited) process.Kill(); } catch { } });
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();

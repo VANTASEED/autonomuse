@@ -145,6 +145,7 @@
             {
                 <div class="youtube-downloader">
                     <p class="section-desc">...or download from YouTube</p>
+
                     <div class="input-row">
                         <div class="youtube-input-wrapper">
                             <input type="text" class="youtube-input" placeholder="Paste YouTube Video or Playlist URL here..."
@@ -157,19 +158,64 @@
                         
                         @if (ViewModel.SelectedMediaType == MediaType.Audio)
                         {
+                            <div class="custom-dropdown @(_isAudioQualDropdownOpen ? "open" : "")">
+                                <div class="dropdown-trigger" @onclick="ToggleAudioQualDropdown">
+                                    <span class="trigger-label">MAX QUALITY:</span>
+                                    <span class="trigger-text">@GetAudioQualityLabel(ViewModel.SelectedAudioQuality)</span>
+                                    <span class="trigger-caret">@(_isAudioQualDropdownOpen ? "▴" : "▾")</span>
+                                </div>
+                                @if (_isAudioQualDropdownOpen)
+                                {
+                                    <div class="dropdown-window">
+                                        <div class="dropdown-option @(ViewModel.SelectedAudioQuality == "320" ? "selected" : "")" @onclick='() => SelectAudioQuality("320")'>320 kbps (Best)</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedAudioQuality == "256" ? "selected" : "")" @onclick='() => SelectAudioQuality("256")'>256 kbps</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedAudioQuality == "192" ? "selected" : "")" @onclick='() => SelectAudioQuality("192")'>192 kbps</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedAudioQuality == "128" ? "selected" : "")" @onclick='() => SelectAudioQuality("128")'>128 kbps</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedAudioQuality == "96" ? "selected" : "")" @onclick='() => SelectAudioQuality("96")'>96 kbps (Low)</div>
+                                    </div>
+                                }
+                            </div>
+
                             <button class="action-btn gold" 
                                     disabled="@ViewModel.IsYoutubeDownloading"
                                     @onclick="ViewModel.DownloadYoutubeAudioAsync">@ViewModel.YoutubeDownloadButtonLabel</button>
+                            @if (ViewModel.IsYoutubeDownloading)
+                            {
+                                <button class="action-btn cancel" @onclick="ViewModel.CancelDownload">Cancel</button>
+                            }
                         }
                         else if (ViewModel.SelectedMediaType == MediaType.Video)
                         {
+                            <div class="custom-dropdown @(_isVideoQualDropdownOpen ? "open" : "")">
+                                <div class="dropdown-trigger" @onclick="ToggleVideoQualDropdown">
+                                    <span class="trigger-label">MAX QUALITY:</span>
+                                    <span class="trigger-text">@GetVideoQualityLabel(ViewModel.SelectedVideoQuality)</span>
+                                    <span class="trigger-caret">@(_isVideoQualDropdownOpen ? "▴" : "▾")</span>
+                                </div>
+                                @if (_isVideoQualDropdownOpen)
+                                {
+                                    <div class="dropdown-window">
+                                        <div class="dropdown-option @(ViewModel.SelectedVideoQuality == "2160" ? "selected" : "")" @onclick='() => SelectVideoQuality("2160")'>2160p (4K)</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedVideoQuality == "1440" ? "selected" : "")" @onclick='() => SelectVideoQuality("1440")'>1440p (2K)</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedVideoQuality == "1080" ? "selected" : "")" @onclick='() => SelectVideoQuality("1080")'>1080p (FHD)</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedVideoQuality == "720" ? "selected" : "")" @onclick='() => SelectVideoQuality("720")'>720p (HD)</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedVideoQuality == "480" ? "selected" : "")" @onclick='() => SelectVideoQuality("480")'>480p (SD)</div>
+                                        <div class="dropdown-option @(ViewModel.SelectedVideoQuality == "360" ? "selected" : "")" @onclick='() => SelectVideoQuality("360")'>360p (Low)</div>
+                                    </div>
+                                }
+                            </div>
+
                             <button class="action-btn gold" 
                                     disabled="@ViewModel.IsYoutubeDownloading"
                                     @onclick="ViewModel.DownloadYoutubeVideoAsync">@ViewModel.YoutubeDownloadButtonLabel</button>
+                            @if (ViewModel.IsYoutubeDownloading)
+                            {
+                                <button class="action-btn cancel" @onclick="ViewModel.CancelDownload">Cancel</button>
+                            }
                         }
                     </div>
                     
-                    @if (!string.IsNullOrEmpty(ViewModel.YoutubeStatusMessage))
+                    @if (ViewModel.IsYoutubeDownloading || !string.IsNullOrEmpty(ViewModel.YoutubeStatusMessage))
                     {
                         <div class="youtube-status-container">
                             <div class="youtube-status-message @(ViewModel.IsYoutubeDownloading ? "downloading" : "") @(ViewModel.YoutubeStatusMessage.Contains("Cleaned YouTube URL") ? "temporary" : "") @(ViewModel.YoutubeDownloadFailures.Any() ? "expandable" : "")"
@@ -194,7 +240,7 @@
                                             <span class="status-icon icon-warning">⚠</span>
                                         }
                                     }
-                                    <span class="status-text">@GetStatusDisplayMessage(ViewModel.YoutubeStatusMessage)</span>
+                                    <span class="status-text">@(ViewModel.IsYoutubeDownloading ? ViewModel.CurrentDownloadProgress : GetStatusDisplayMessage(ViewModel.YoutubeStatusMessage))</span>
                                 </div>
                                 
                                 <div class="status-actions">
@@ -268,6 +314,7 @@
     protected override async Task OnInitializedAsync()
     {
         ViewModel.PropertyChanged += (s, e) => InvokeAsync(StateHasChanged);
+        await ViewModel.LoadSettingsAsync();
         await ViewModel.LoadOrganizationOptionsAsync();
         await LoadNoticeAsync();
     }
@@ -312,7 +359,71 @@
         _ => "\u2139"
     };
 
-    private void ToggleOrgDropdown() => _isOrgDropdownOpen = !_isOrgDropdownOpen;
+    private void ToggleOrgDropdown()
+    {
+        _isOrgDropdownOpen = !_isOrgDropdownOpen;
+        if (_isOrgDropdownOpen)
+        {
+            _isAudioQualDropdownOpen = false;
+            _isVideoQualDropdownOpen = false;
+        }
+    }
+
+    private bool _isAudioQualDropdownOpen;
+    private bool _isVideoQualDropdownOpen;
+
+    private void ToggleAudioQualDropdown()
+    {
+        _isAudioQualDropdownOpen = !_isAudioQualDropdownOpen;
+        if (_isAudioQualDropdownOpen)
+        {
+            _isVideoQualDropdownOpen = false;
+            _isOrgDropdownOpen = false;
+        }
+    }
+
+    private void ToggleVideoQualDropdown()
+    {
+        _isVideoQualDropdownOpen = !_isVideoQualDropdownOpen;
+        if (_isVideoQualDropdownOpen)
+        {
+            _isAudioQualDropdownOpen = false;
+            _isOrgDropdownOpen = false;
+        }
+    }
+
+    private void SelectAudioQuality(string value)
+    {
+        ViewModel.SelectedAudioQuality = value;
+        _isAudioQualDropdownOpen = false;
+    }
+
+    private void SelectVideoQuality(string value)
+    {
+        ViewModel.SelectedVideoQuality = value;
+        _isVideoQualDropdownOpen = false;
+    }
+
+    private string GetAudioQualityLabel(string value) => value switch
+    {
+        "320" => "320 kbps (Best)",
+        "256" => "256 kbps",
+        "192" => "192 kbps",
+        "128" => "128 kbps",
+        "96" => "96 kbps (Low)",
+        _ => $"{value} kbps"
+    };
+
+    private string GetVideoQualityLabel(string value) => value switch
+    {
+        "2160" => "2160p (4K)",
+        "1440" => "1440p (2K)",
+        "1080" => "1080p (FHD)",
+        "720" => "720p (HD)",
+        "480" => "480p (SD)",
+        "360" => "360p (Low)",
+        _ => $"{value}p"
+    };
 
     private string GetStatusDisplayMessage(string rawMessage)
     {

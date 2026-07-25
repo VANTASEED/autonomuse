@@ -7,6 +7,8 @@ namespace Autonomuse.Domain.Entities
         public string Title { get; set; } = string.Empty;
         public string Extension { get; set; } = string.Empty;
         public string? AlternativeTitle { get; set; }
+        public string? AlternativeArtist { get; set; }
+        public int IsOriginalNonEnglish { get; set; } = 0;
         public string Source { get; set; } = string.Empty; // "manual upload", "youtube"
         public string? YoutubeID { get; set; }
         public string FilePath { get; set; } = string.Empty;
@@ -26,5 +28,6 @@ namespace Autonomuse.Domain.Entities
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public int EnrichmentStatus { get; set; } = 0; // 0: None, 1: MusicBrainz, 2: AppleMusic
+        public int FailedEnrich { get; set; } = 0; // 0: false, 1: true
     }
 }

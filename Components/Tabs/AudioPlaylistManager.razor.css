@@ -215,12 +215,12 @@
     position: relative;
 }
 
-.checkbox-label input:checked + .checkbox-custom {
+.checkbox-label input:checked+.checkbox-custom {
     background: var(--accent-base);
     border-color: var(--accent-base);
 }
 
-.checkbox-label input:checked + .checkbox-custom::after {
+.checkbox-label input:checked+.checkbox-custom::after {
     content: "✓";
     color: #000;
     font-size: 0.8rem;
@@ -261,8 +261,8 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: #aaa;
     padding: 4px 10px;
     border-radius: 50px 0 0 50px;
@@ -273,7 +273,7 @@
 
 .sort-compound-pill .dropdown-trigger:hover,
 .sort-compound-pill .dropdown-trigger.active {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     color: #fff;
 }
 
@@ -283,8 +283,8 @@
 }
 
 .sort-toggle-btn {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-left: none;
     color: #aaa;
     padding: 4px 10px;
@@ -296,7 +296,7 @@
 }
 
 .sort-toggle-btn:hover {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     color: #fff;
 }
 
@@ -387,6 +387,7 @@
         opacity: 0;
         transform: translateY(-10px) scale(0.95);
     }
+
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -398,8 +399,126 @@
         opacity: 0;
         transform: translateY(10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+.playlist-item-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.delete-playlist-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 0.4rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.delete-playlist-btn:hover {
+    color: #ff4a4a;
+    background: rgba(255, 74, 74, 0.1);
+}
+
+.playlist-item.active .delete-playlist-btn {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.playlist-item.active .delete-playlist-btn:hover {
+    color: #d32f2f;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+/* Modal styles */
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.delete-confirmation-modal {
+    max-width: 480px;
+    width: 90%;
+    padding: 2rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    border-radius: 12px;
+    text-transform: none;
+}
+
+.delete-confirmation-modal h4 {
+    margin-top: 0;
+    color: var(--accent-base);
+    font-size: 1.3rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 1rem;
+}
+
+.delete-confirmation-modal p {
+    color: #ccc;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+}
+
+.confirmation-details {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 0.2rem 1rem 1rem 1rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.confirmation-details p {
+    font-size: 0.85rem;
+    margin-bottom: 0.8rem;
+    line-height: 1.4;
+}
+
+.confirmation-details p:last-child {
+    margin-bottom: 0;
+}
+
+.watcher-warning {
+    color: #ffb74d !important;
+    font-weight: 600;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+}
+
+.danger-btn {
+    background: #ff4a4a !important;
+    color: #fff !important;
+}
+
+.danger-btn:hover {
+    background: #d32f2f !important;
 }

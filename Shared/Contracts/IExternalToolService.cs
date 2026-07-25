@@ -1,3 +1,5 @@
+using System.Threading;
+
 namespace Autonomuse.Shared.Contracts
 {
     public interface IExternalToolService
@@ -30,7 +32,7 @@ namespace Autonomuse.Shared.Contracts
         /// <summary>
         /// Executes a command and captures its output.
         /// </summary>
-        Task<(int ExitCode, string StandardOutput, string StandardError)> RunCommandAsync(string toolName, string arguments);
+        Task<(int ExitCode, string StandardOutput, string StandardError)> RunCommandAsync(string toolName, string arguments, CancellationToken ct = default);
 
         /// <summary>
         /// Checks which tools are outdated using winget.

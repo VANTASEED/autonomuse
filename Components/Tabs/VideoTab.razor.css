@@ -403,6 +403,7 @@
 .year-pill {
     background: white;
     color: black;
+    border: 1px solid white;
 }
 
 .res-pill {
@@ -416,27 +417,31 @@
 .source-pill.youtube {
     background: #ff0000;
     color: white;
+    border: 1px solid #ff0000;
 }
 
 .source-pill.manual {
     background: #024e02;
     color: white;
+    border: 1px solid #024e02;
 }
 
 .status-pill.standard {
     background: rgba(255, 255, 255, 0.05);
     color: #eee;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .status-pill.manual {
     background: rgba(147, 51, 234, 0.15);
     color: #c084fc;
-    border: 1px solid rgba(192, 132, 252, 0.2);
+    border: 1px solid rgba(192, 132, 252, 0.3);
 }
 
 .status-pill.disabled {
     background: rgba(239, 68, 68, 0.1);
     color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .loading-state,
@@ -563,6 +568,11 @@
     font-size: 0.85rem;
     color: #f87171;
     font-weight: 500;
+}
+
+.confirm-buttons {
+    display: flex;
+    gap: 0.4rem;
 }
 
 /* Search container styling */
@@ -707,7 +717,7 @@
     font-family: monospace;
     font-size: 0.8rem;
     display: inline-block;
-    width: 60px;
+    width: 120px;
 }
 
 .tooltip-body code {
@@ -1475,4 +1485,70 @@
 @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+}
+
+.modal-tab-pills {
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 3px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.modal-tab-btn {
+    background: transparent;
+    border: none;
+    color: #999;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modal-tab-btn:hover {
+    color: #fff;
+}
+
+.modal-tab-btn.active {
+    background: var(--accent-base, #3b82f6);
+    color: var(--accent-text, #fff);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.close-btn {
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    padding: 0;
+    line-height: 1;
+}
+
+.close-btn:hover {
+    color: var(--accent-base);
+}
+
+.original-empty-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    color: #aaa;
+    gap: 0.8rem;
+}
+
+.original-empty-banner p {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.4;
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading;
 using Autonomuse.Domain.Entities;
 using Autonomuse.Shared.Contracts;
 using Microsoft.Extensions.Logging;
@@ -31,17 +32,17 @@ namespace Autonomuse.Services.Orchestration
             _logger = logger;
         }
 
-        public async Task<YoutubeDownloadResult> DownloadAudioAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null)
+        public async Task<YoutubeDownloadResult> DownloadAudioAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null, CancellationToken ct = default)
         {
-            return await DownloadMediaAsync(url, true, onProgress, onPlaylistCreated, manualPlaylistGuid);
+            return await DownloadMediaAsync(url, true, onProgress, onPlaylistCreated, manualPlaylistGuid, ct);
         }
 
-        public async Task<YoutubeDownloadResult> DownloadVideoAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null)
+        public async Task<YoutubeDownloadResult> DownloadVideoAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null, CancellationToken ct = default)
         {
-            return await DownloadMediaAsync(url, false, onProgress, onPlaylistCreated, manualPlaylistGuid);
+            return await DownloadMediaAsync(url, false, onProgress, onPlaylistCreated, manualPlaylistGuid, ct);
         }
 
-        private async Task<YoutubeDownloadResult> DownloadMediaAsync(string url, bool isAudio, Action<string>? onProgress, Func<Task>? onPlaylistCreated, string? manualPlaylistGuid = null)
+        private async Task<YoutubeDownloadResult> DownloadMediaAsync(string url, bool isAudio, Action<string>? onProgress, Func<Task>? onPlaylistCreated, string? manualPlaylistGuid = null, CancellationToken ct = default)
         {
             var libraryPath = await _settingsService.GetSettingAsync("LibraryPath");
             if (string.IsNullOrEmpty(libraryPath)) throw new InvalidOperationException("Library path not set.");
@@ -56,8 +57,10 @@ namespace Autonomuse.Services.Orchestration
 
             onProgress?.Invoke("Extracting metadata...");
             
+            CleanupPartFiles(targetFolder, null);
+
             var metaArgs = $"--dump-json --flat-playlist --no-warnings \"{url}\"";
-            var (code, stdout, stderr) = await _toolService.RunCommandAsync("yt-dlp", metaArgs);
+            var (code, stdout, stderr) = await _toolService.RunCommandAsync("yt-dlp", metaArgs, ct);
 
             if (code != 0)
             {
@@ -172,21 +175,28 @@ namespace Autonomuse.Services.Orchestration
                     }
                 }
 
+                ct.ThrowIfCancellationRequested();
+
                 var itemUrl = $"https://www.youtube.com/watch?v={item?.id}";
                 
                 // Get Original metadata
                 var itemMetaArgs = $"--dump-json --no-warnings \"{itemUrl}\"";
-                var (mCode, mStdout, mStderr) = await _toolService.RunCommandAsync("yt-dlp", itemMetaArgs);
+                var (mCode, mStdout, mStderr) = await _toolService.RunCommandAsync("yt-dlp", itemMetaArgs, ct);
                 var fullMeta = mCode == 0 ? JsonSerializer.Deserialize<YtDlpInfo>(mStdout) : item;
 
                 // Get English metadata for AlternativeTitle
                 var enMetaArgs = $"--dump-json --no-warnings --extractor-args \"youtube:lang=en\" \"{itemUrl}\"";
-                var (enCode, enStdout, enStderr) = await _toolService.RunCommandAsync("yt-dlp", enMetaArgs);
+                var (enCode, enStdout, enStderr) = await _toolService.RunCommandAsync("yt-dlp", enMetaArgs, ct);
                 var enMeta = enCode == 0 ? JsonSerializer.Deserialize<YtDlpInfo>(enStdout) : null;
 
                 var rawTitle = fullMeta?.title ?? item?.title ?? "Unknown";
                 var englishTitle = enMeta?.title ?? rawTitle;
-                var altTitle = (englishTitle == rawTitle) ? rawTitle : englishTitle;
+                var isNonEnglish = englishTitle != rawTitle;
+                var altTitle = isNonEnglish ? englishTitle : null;
+
+                var rawArtist = fullMeta?.uploader;
+                var englishArtist = enMeta?.uploader ?? rawArtist;
+                var altArtist = (isNonEnglish && englishArtist != rawArtist) ? englishArtist : null;
 
                 // Extract Genre and Year
                 string? genre = fullMeta?.categories?.FirstOrDefault();
@@ -200,11 +210,13 @@ namespace Autonomuse.Services.Orchestration
                 if (isAudio)
                 {
                     // Download as ID first to be safe
-                    downloadArgs = $"-x --audio-format mp3 --audio-quality 0 --add-metadata --embed-thumbnail --print after_move:filepath -o \"{targetFolder}/%(id)s.%(ext)s\" \"{itemUrl}\"";
+                    var preferredAudioQual = await _settingsService.GetSettingAsync("PreferredAudioQuality") ?? "320";
+                    downloadArgs = $"-f \"bestaudio[abr<={preferredAudioQual}]/bestaudio\" -x --audio-format mp3 --audio-quality {preferredAudioQual}k --add-metadata --embed-thumbnail --print after_move:filepath -o \"{targetFolder}/%(id)s.%(ext)s\" \"{itemUrl}\"";
                 }
                 else
                 {
-                    downloadArgs = $"-f \"bestvideo[height<=1080]+bestaudio/best[height<=1080]/best\" --merge-output-format mp4 --print after_move:filepath -o \"{targetFolder}/%(id)s.%(ext)s\" \"{itemUrl}\"";
+                    var preferredVideoQual = await _settingsService.GetSettingAsync("PreferredVideoQuality") ?? "1080";
+                    downloadArgs = $"-f \"bestvideo[height<={preferredVideoQual}]+bestaudio/best[height<={preferredVideoQual}]/best\" --merge-output-format mp4 --print after_move:filepath -o \"{targetFolder}/%(id)s.%(ext)s\" \"{itemUrl}\"";
                 }
 
                 int maxRetries = 3;
@@ -215,8 +227,9 @@ namespace Autonomuse.Services.Orchestration
 
                 while (currentTry < maxRetries)
                 {
+                    ct.ThrowIfCancellationRequested();
                     currentTry++;
-                    var result = await _toolService.RunCommandAsync("yt-dlp", downloadArgs);
+                    var result = await _toolService.RunCommandAsync("yt-dlp", downloadArgs, ct);
                     dCode = result.ExitCode;
                     dStdout = result.StandardOutput;
                     dStderr = result.StandardError;
@@ -229,13 +242,14 @@ namespace Autonomuse.Services.Orchestration
                     if (currentTry < maxRetries)
                     {
                         _logger.LogWarning("Download attempt {Attempt} failed for {Id}. Retrying in 2 seconds... Error: {Error}", currentTry, item?.id, dStderr);
-                        await Task.Delay(2000);
+                        await Task.Delay(2000, ct);
                     }
                 }
 
                 if (dCode != 0)
                 {
                     _logger.LogWarning("Failed to download {Id} after {Max} attempts: {Error}", item?.id, maxRetries, dStderr);
+                    CleanupPartFiles(targetFolder, item?.id);
                     errorCount++;
                     failures.Add(new YoutubeDownloadFailure
                     {
@@ -271,127 +285,145 @@ namespace Autonomuse.Services.Orchestration
                 }
 
                 var guid = Guid.NewGuid().ToString();
-                
-                // 6. Process Art
                 string? artPath = null;
-                if (!string.IsNullOrEmpty(fullMeta?.thumbnail))
+                bool recorded = false;
+                try
                 {
-                    try
+                    // 6. Process Art
+                    if (!string.IsNullOrEmpty(fullMeta?.thumbnail))
                     {
-                        var artFileName = $"{guid}.jpg";
-                        var artDestination = Path.Combine(artBaseFolder, artFileName);
-                        await ProcessThumbnailAsync(fullMeta.thumbnail, artDestination, isAudio);
-                        artPath = artDestination;
+                        try
+                        {
+                            var artFileName = $"{guid}.jpg";
+                            var artDestination = Path.Combine(artBaseFolder, artFileName);
+                            await ProcessThumbnailAsync(fullMeta.thumbnail, artDestination, isAudio);
+                            artPath = artDestination;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning("Failed to process thumbnail for {Id}: {Ex}", item?.id, ex.Message);
+                        }
                     }
-                    catch (Exception ex)
+
+                    // Make path absolute (as requested)
+                    var finalFilePath = finalPath;
+
+                    // 5. Record to Database
+                    if (isAudio)
                     {
-                        _logger.LogWarning("Failed to process thumbnail for {Id}: {Ex}", item?.id, ex.Message);
+                        var record = new AudioRecord
+                        {
+                            GUID = guid,
+                            FileName = Path.GetFileName(finalPath),
+                            Title = rawTitle,
+                            AlternativeTitle = altTitle,
+                            AlternativeArtist = altArtist,
+                            IsOriginalNonEnglish = isNonEnglish ? 1 : 0,
+                            Extension = Path.GetExtension(finalPath),
+                            Source = "youtube",
+                            YoutubeID = fullMeta?.id ?? item?.id,
+                            FilePath = finalFilePath,
+                            Artist = fullMeta?.uploader,
+                            Genre = genre,
+                            Year = year,
+                            FileSize = new FileInfo(finalPath).Length,
+                            CoverArtPath = artPath,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+
+                        // Metadata extraction from file properties (Mandatory for Resolution, Bitrate, Channels)
+                        try
+                        {
+                            using var tfile = TagLib.File.Create(finalPath);
+                            record.Duration = tfile.Properties?.Duration.TotalSeconds ?? fullMeta?.duration;
+                            
+                            if (tfile.Properties != null)
+                            {
+                                record.Channels = tfile.Properties.AudioChannels;
+                                record.SampleRate = tfile.Properties.AudioSampleRate;
+                                record.Bitrate = tfile.Properties.AudioBitrate;
+                            }
+
+                            if ((record.Bitrate ?? 0) == 0 && fullMeta?.abr > 0)
+                                record.Bitrate = (int)Math.Round(fullMeta.abr.Value);
+                        }
+                        catch (Exception ex) { _logger.LogWarning("Audio meta extraction failed: {Ex}", ex.Message); }
+
+                        // Generate Fingerprint for YouTube Audio
+                        record.Fingerprint = await _audioService.GenerateFingerprintAsync(record.FilePath);
+
+                        await _audioService.AddAudioRecordAsync(record);
+                        recorded = true;
+
+                        // Overwrite default widescreen embedded thumbnail with the cropped square version
+                        await _audioService.UpdatePhysicalTagsAsync(record);
+
+                        successCount++;
+                        if (!string.IsNullOrEmpty(playlistGuid))
+                            await _audioService.AddToPlaylistAsync(playlistGuid, record.GUID);
+                        if (!string.IsNullOrEmpty(manualPlaylistGuid))
+                            await _audioService.AddToPlaylistAsync(manualPlaylistGuid, record.GUID);
+                    }
+                    else
+                    {
+                        var record = new VideoRecord
+                        {
+                            GUID = guid,
+                            FileName = Path.GetFileName(finalPath),
+                            Title = rawTitle,
+                            AlternativeTitle = altTitle,
+                            AlternativeArtist = altArtist,
+                            IsOriginalNonEnglish = isNonEnglish ? 1 : 0,
+                            Extension = Path.GetExtension(finalPath),
+                            Source = "youtube",
+                            YoutubeID = fullMeta?.id ?? item?.id,
+                            FilePath = finalFilePath,
+                            Genre = genre,
+                            Artist = fullMeta?.uploader,
+                            Year = year,
+                            FileSize = new FileInfo(finalPath).Length,
+                            ThumbnailPath = artPath,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+
+                        // Metadata extraction from file properties (Mandatory for Resolution, Bitrate, Channels)
+                        try
+                        {
+                            using var tfile = TagLib.File.Create(finalPath);
+                            record.Duration = tfile.Properties?.Duration.TotalSeconds ?? fullMeta?.duration;
+
+                            if (tfile.Properties != null)
+                            {
+                                record.Resolution = tfile.Properties.VideoWidth > 0 ? $"{tfile.Properties.VideoWidth}x{tfile.Properties.VideoHeight}" : null;
+                                record.Bitrate = tfile.Properties.AudioBitrate;
+                                record.SampleRate = tfile.Properties.AudioSampleRate;
+                                record.Channels = tfile.Properties.AudioChannels;
+                            }
+
+                            if ((record.Bitrate ?? 0) == 0 && fullMeta?.abr > 0)
+                                record.Bitrate = (int)Math.Round(fullMeta.abr.Value);
+                        }
+                        catch (Exception ex) { _logger.LogWarning("Video meta extraction failed: {Ex}", ex.Message); }
+
+                        await _videoService.AddVideoRecordAsync(record);
+                        recorded = true;
+                        successCount++;
+                        if (!string.IsNullOrEmpty(playlistGuid))
+                            await _videoService.AddToPlaylistAsync(playlistGuid, record.GUID);
+                        if (!string.IsNullOrEmpty(manualPlaylistGuid))
+                            await _videoService.AddToPlaylistAsync(manualPlaylistGuid, record.GUID);
                     }
                 }
-
-                // Make path absolute (as requested)
-                var finalFilePath = finalPath;
-
-                // 5. Record to Database
-                if (isAudio)
+                catch
                 {
-                    var record = new AudioRecord
+                    if (!recorded)
                     {
-                        GUID = guid,
-                        FileName = Path.GetFileName(finalPath),
-                        Title = rawTitle,
-                        AlternativeTitle = altTitle,
-                        Extension = Path.GetExtension(finalPath),
-                        Source = "youtube",
-                        YoutubeID = fullMeta?.id ?? item?.id,
-                        FilePath = finalFilePath,
-                        Artist = fullMeta?.uploader,
-                        Genre = genre,
-                        Year = year,
-                        FileSize = new FileInfo(finalPath).Length,
-                        CoverArtPath = artPath,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-
-                    // Metadata extraction from file properties (Mandatory for Resolution, Bitrate, Channels)
-                    try
-                    {
-                        using var tfile = TagLib.File.Create(finalPath);
-                        record.Duration = tfile.Properties?.Duration.TotalSeconds ?? fullMeta?.duration;
-                        
-                        if (tfile.Properties != null)
-                        {
-                            record.Channels = tfile.Properties.AudioChannels;
-                            record.SampleRate = tfile.Properties.AudioSampleRate;
-                            record.Bitrate = tfile.Properties.AudioBitrate;
-                        }
-
-                        if ((record.Bitrate ?? 0) == 0 && fullMeta?.abr > 0)
-                            record.Bitrate = (int)Math.Round(fullMeta.abr.Value);
+                        try { if (System.IO.File.Exists(finalPath)) System.IO.File.Delete(finalPath); } catch { }
+                        try { if (artPath != null && System.IO.File.Exists(artPath)) System.IO.File.Delete(artPath); } catch { }
                     }
-                    catch (Exception ex) { _logger.LogWarning("Audio meta extraction failed: {Ex}", ex.Message); }
-
-                    // Generate Fingerprint for YouTube Audio
-                    record.Fingerprint = await _audioService.GenerateFingerprintAsync(record.FilePath);
-
-                    await _audioService.AddAudioRecordAsync(record);
-                    
-                    // Overwrite default widescreen embedded thumbnail with the cropped square version
-                    await _audioService.UpdatePhysicalTagsAsync(record);
-                    
-                    successCount++;
-                    if (!string.IsNullOrEmpty(playlistGuid))
-                        await _audioService.AddToPlaylistAsync(playlistGuid, record.GUID);
-                    if (!string.IsNullOrEmpty(manualPlaylistGuid))
-                        await _audioService.AddToPlaylistAsync(manualPlaylistGuid, record.GUID);
-                }
-                else
-                {
-                    var record = new VideoRecord
-                    {
-                        GUID = guid,
-                        FileName = Path.GetFileName(finalPath),
-                        Title = rawTitle,
-                        AlternativeTitle = altTitle,
-                        Extension = Path.GetExtension(finalPath),
-                        Source = "youtube",
-                        YoutubeID = fullMeta?.id ?? item?.id,
-                        FilePath = finalFilePath,
-                        Genre = genre,
-                        Artist = fullMeta?.uploader,
-                        Year = year,
-                        FileSize = new FileInfo(finalPath).Length,
-                        ThumbnailPath = artPath,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-
-                    // Metadata extraction from file properties (Mandatory for Resolution, Bitrate, Channels)
-                    try
-                    {
-                        using var tfile = TagLib.File.Create(finalPath);
-                        record.Duration = tfile.Properties?.Duration.TotalSeconds ?? fullMeta?.duration;
-
-                        if (tfile.Properties != null)
-                        {
-                            record.Resolution = tfile.Properties.VideoWidth > 0 ? $"{tfile.Properties.VideoWidth}x{tfile.Properties.VideoHeight}" : null;
-                            record.Bitrate = tfile.Properties.AudioBitrate;
-                            record.SampleRate = tfile.Properties.AudioSampleRate;
-                            record.Channels = tfile.Properties.AudioChannels;
-                        }
-
-                        if ((record.Bitrate ?? 0) == 0 && fullMeta?.abr > 0)
-                            record.Bitrate = (int)Math.Round(fullMeta.abr.Value);
-                    }
-                    catch (Exception ex) { _logger.LogWarning("Video meta extraction failed: {Ex}", ex.Message); }
-
-                    await _videoService.AddVideoRecordAsync(record);
-                    successCount++;
-                    if (!string.IsNullOrEmpty(playlistGuid))
-                        await _videoService.AddToPlaylistAsync(playlistGuid, record.GUID);
-                    if (!string.IsNullOrEmpty(manualPlaylistGuid))
-                        await _videoService.AddToPlaylistAsync(manualPlaylistGuid, record.GUID);
+                    throw;
                 }
             }
 
@@ -406,9 +438,34 @@ namespace Autonomuse.Services.Orchestration
             };
         }
 
+        private static void CleanupPartFiles(string folder, string? youtubeId)
+        {
+            try
+            {
+                var pattern = string.IsNullOrEmpty(youtubeId) ? "*.part" : $"*{youtubeId}*.part";
+                foreach (var f in Directory.GetFiles(folder, pattern))
+                    System.IO.File.Delete(f);
+            }
+            catch { }
+        }
+
         private async Task ProcessThumbnailAsync(string thumbnailUrl, string destinationPath, bool cropSquare)
         {
-            var bytes = await _httpClient.GetByteArrayAsync(thumbnailUrl);
+            byte[] bytes = [];
+            int maxRetries = 3;
+            for (int i = 0; i < maxRetries; i++)
+            {
+                try
+                {
+                    bytes = await _httpClient.GetByteArrayAsync(thumbnailUrl);
+                    break;
+                }
+                catch
+                {
+                    if (i < maxRetries - 1) await Task.Delay(1000 * (i + 1));
+                    else return;
+                }
+            }
             using var inputStream = new MemoryStream(bytes);
             using var original = SKBitmap.Decode(inputStream);
             

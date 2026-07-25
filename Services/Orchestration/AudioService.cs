@@ -176,10 +176,10 @@ namespace Autonomuse.Services.Orchestration
 
                 var command = connection.CreateCommand();
                 command.CommandText = @"
-                    SELECT [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [Source], [YoutubeID],
+                    SELECT [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [AlternativeArtist], [IsOriginalNonEnglish], [Source], [YoutubeID],
                            [FilePath], [Artist], [Album], [Genre], [Duration], [Bitrate], 
                            [SampleRate], [Channels], [Year], [FileSize], [CoverArtPath], [Fingerprint], [CreatedAt], [UpdatedAt],
-                           [EnrichmentStatus]
+                           [EnrichmentStatus], [FailedEnrich]
                     FROM Audio ORDER BY [CreatedAt] DESC;
                 ";
 
@@ -193,23 +193,26 @@ namespace Autonomuse.Services.Orchestration
                         Title = reader.GetString(2),
                         Extension = reader.GetString(3),
                         AlternativeTitle = reader.IsDBNull(4) ? null : reader.GetString(4),
-                        Source = reader.GetString(5),
-                        YoutubeID = reader.IsDBNull(6) ? null : reader.GetString(6),
-                        FilePath = reader.GetString(7),
-                        Artist = reader.IsDBNull(8) ? null : reader.GetString(8),
-                        Album = reader.IsDBNull(9) ? null : reader.GetString(9),
-                        Genre = reader.IsDBNull(10) ? null : reader.GetString(10),
-                        Duration = reader.IsDBNull(11) ? null : reader.GetDouble(11),
-                        Bitrate = reader.IsDBNull(12) ? null : reader.GetInt32(12),
-                        SampleRate = reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                        Channels = reader.IsDBNull(14) ? null : reader.GetInt32(14),
-                        Year = reader.IsDBNull(15) ? null : reader.GetInt32(15),
-                        FileSize = reader.IsDBNull(16) ? null : reader.GetInt64(16),
-                        CoverArtPath = reader.IsDBNull(17) ? null : reader.GetString(17),
-                        Fingerprint = reader.IsDBNull(18) ? null : reader.GetString(18),
-                        CreatedAt = reader.GetDateTime(19),
-                        UpdatedAt = reader.GetDateTime(20),
-                        EnrichmentStatus = reader.GetInt32(21)
+                        AlternativeArtist = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        IsOriginalNonEnglish = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                        Source = reader.GetString(7),
+                        YoutubeID = reader.IsDBNull(8) ? null : reader.GetString(8),
+                        FilePath = reader.GetString(9),
+                        Artist = reader.IsDBNull(10) ? null : reader.GetString(10),
+                        Album = reader.IsDBNull(11) ? null : reader.GetString(11),
+                        Genre = reader.IsDBNull(12) ? null : reader.GetString(12),
+                        Duration = reader.IsDBNull(13) ? null : reader.GetDouble(13),
+                        Bitrate = reader.IsDBNull(14) ? null : reader.GetInt32(14),
+                        SampleRate = reader.IsDBNull(15) ? null : reader.GetInt32(15),
+                        Channels = reader.IsDBNull(16) ? null : reader.GetInt32(16),
+                        Year = reader.IsDBNull(17) ? null : reader.GetInt32(17),
+                        FileSize = reader.IsDBNull(18) ? null : reader.GetInt64(18),
+                        CoverArtPath = reader.IsDBNull(19) ? null : reader.GetString(19),
+                        Fingerprint = reader.IsDBNull(20) ? null : reader.GetString(20),
+                        CreatedAt = reader.GetDateTime(21),
+                        UpdatedAt = reader.GetDateTime(22),
+                        EnrichmentStatus = reader.GetInt32(23),
+                        FailedEnrich = reader.GetInt32(24)
                     });
                 }
             }
@@ -231,15 +234,15 @@ namespace Autonomuse.Services.Orchestration
                 var command = connection.CreateCommand();
                 command.CommandText = @"
                     INSERT INTO Audio (
-                        [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [Source], [YoutubeID],
+                        [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [AlternativeArtist], [IsOriginalNonEnglish], [Source], [YoutubeID],
                         [FilePath], [Artist], [Album], [Genre], [Duration], [Bitrate],
                         [SampleRate], [Channels], [Year], [FileSize], [CoverArtPath], [Fingerprint], [CreatedAt], [UpdatedAt],
-                        [EnrichmentStatus]
+                        [EnrichmentStatus], [FailedEnrich]
                     ) VALUES (
-                        @guid, @fileName, @title, @ext, @altTitle, @source, @yid,
+                        @guid, @fileName, @title, @ext, @altTitle, @altArtist, @isNonEnglish, @source, @yid,
                         @filePath, @artist, @album, @genre, @duration, @bitrate,
                         @sampleRate, @channels, @year, @fileSize, @coverArt, @fingerprint, @createdAt, @updatedAt,
-                        @enrichStatus
+                        @enrichStatus, @failedEnrich
                     );
                 ";
 
@@ -248,6 +251,8 @@ namespace Autonomuse.Services.Orchestration
                 command.Parameters.AddWithValue("@title", record.Title);
                 command.Parameters.AddWithValue("@ext", record.Extension);
                 command.Parameters.AddWithValue("@altTitle", (object?)record.AlternativeTitle ?? DBNull.Value);
+                command.Parameters.AddWithValue("@altArtist", (object?)record.AlternativeArtist ?? DBNull.Value);
+                command.Parameters.AddWithValue("@isNonEnglish", record.IsOriginalNonEnglish);
                 command.Parameters.AddWithValue("@source", record.Source);
                 command.Parameters.AddWithValue("@yid", (object?)record.YoutubeID ?? DBNull.Value);
                 command.Parameters.AddWithValue("@filePath", record.FilePath);
@@ -265,6 +270,7 @@ namespace Autonomuse.Services.Orchestration
                 command.Parameters.AddWithValue("@createdAt", record.CreatedAt);
                 command.Parameters.AddWithValue("@updatedAt", record.UpdatedAt);
                 command.Parameters.AddWithValue("@enrichStatus", record.EnrichmentStatus);
+                command.Parameters.AddWithValue("@failedEnrich", record.FailedEnrich);
 
                 await command.ExecuteNonQueryAsync();
             }
@@ -381,7 +387,7 @@ namespace Autonomuse.Services.Orchestration
                 using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
                 await connection.OpenAsync();
                 var cmd = connection.CreateCommand();
-                cmd.CommandText = "SELECT [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [Source], [YoutubeID], [FilePath], [Artist], [Album], [Genre], [Duration], [Bitrate], [SampleRate], [Channels], [Year], [FileSize], [CoverArtPath], [CreatedAt], [UpdatedAt] FROM Audio WHERE [Title] = @title AND [Source] = @source COLLATE NOCASE LIMIT 1";
+                cmd.CommandText = "SELECT [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [AlternativeArtist], [IsOriginalNonEnglish], [Source], [YoutubeID], [FilePath], [Artist], [Album], [Genre], [Duration], [Bitrate], [SampleRate], [Channels], [Year], [FileSize], [CoverArtPath], [Fingerprint], [CreatedAt], [UpdatedAt], [EnrichmentStatus], [FailedEnrich] FROM Audio WHERE [Title] = @title AND [Source] = @source COLLATE NOCASE LIMIT 1";
                 cmd.Parameters.AddWithValue("@title", title);
                 cmd.Parameters.AddWithValue("@source", source);
 
@@ -395,21 +401,26 @@ namespace Autonomuse.Services.Orchestration
                         Title = reader.GetString(2),
                         Extension = reader.GetString(3),
                         AlternativeTitle = reader.IsDBNull(4) ? null : reader.GetString(4),
-                        Source = reader.GetString(5),
-                        YoutubeID = reader.IsDBNull(6) ? null : reader.GetString(6),
-                        FilePath = reader.GetString(7),
-                        Artist = reader.IsDBNull(8) ? null : reader.GetString(8),
-                        Album = reader.IsDBNull(9) ? null : reader.GetString(9),
-                        Genre = reader.IsDBNull(10) ? null : reader.GetString(10),
-                        Duration = reader.IsDBNull(11) ? null : reader.GetDouble(11),
-                        Bitrate = reader.IsDBNull(12) ? null : reader.GetInt32(12),
-                        SampleRate = reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                        Channels = reader.IsDBNull(14) ? null : reader.GetInt32(14),
-                        Year = reader.IsDBNull(15) ? null : reader.GetInt32(15),
-                        FileSize = reader.IsDBNull(16) ? null : reader.GetInt64(16),
-                        CoverArtPath = reader.IsDBNull(17) ? null : reader.GetString(17),
-                        CreatedAt = reader.GetDateTime(18),
-                        UpdatedAt = reader.GetDateTime(19)
+                        AlternativeArtist = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        IsOriginalNonEnglish = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                        Source = reader.GetString(7),
+                        YoutubeID = reader.IsDBNull(8) ? null : reader.GetString(8),
+                        FilePath = reader.GetString(9),
+                        Artist = reader.IsDBNull(10) ? null : reader.GetString(10),
+                        Album = reader.IsDBNull(11) ? null : reader.GetString(11),
+                        Genre = reader.IsDBNull(12) ? null : reader.GetString(12),
+                        Duration = reader.IsDBNull(13) ? null : reader.GetDouble(13),
+                        Bitrate = reader.IsDBNull(14) ? null : reader.GetInt32(14),
+                        SampleRate = reader.IsDBNull(15) ? null : reader.GetInt32(15),
+                        Channels = reader.IsDBNull(16) ? null : reader.GetInt32(16),
+                        Year = reader.IsDBNull(17) ? null : reader.GetInt32(17),
+                        FileSize = reader.IsDBNull(18) ? null : reader.GetInt64(18),
+                        CoverArtPath = reader.IsDBNull(19) ? null : reader.GetString(19),
+                        Fingerprint = reader.IsDBNull(20) ? null : reader.GetString(20),
+                        CreatedAt = reader.GetDateTime(21),
+                        UpdatedAt = reader.GetDateTime(22),
+                         EnrichmentStatus = reader.GetInt32(23),
+                         FailedEnrich = reader.GetInt32(24)
                     };
                 }
             }
@@ -427,7 +438,7 @@ namespace Autonomuse.Services.Orchestration
                 using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
                 await connection.OpenAsync();
                 var cmd = connection.CreateCommand();
-                cmd.CommandText = "SELECT [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [Source], [YoutubeID], [FilePath], [Artist], [Album], [Genre], [Duration], [Bitrate], [SampleRate], [Channels], [Year], [FileSize], [CoverArtPath], [CreatedAt], [UpdatedAt] FROM Audio WHERE [YoutubeID] = @yid LIMIT 1";
+                cmd.CommandText = "SELECT [GUID], [FileName], [Title], [Extension], [AlternativeTitle], [AlternativeArtist], [IsOriginalNonEnglish], [Source], [YoutubeID], [FilePath], [Artist], [Album], [Genre], [Duration], [Bitrate], [SampleRate], [Channels], [Year], [FileSize], [CoverArtPath], [Fingerprint], [CreatedAt], [UpdatedAt], [EnrichmentStatus], [FailedEnrich] FROM Audio WHERE [YoutubeID] = @yid LIMIT 1";
                 cmd.Parameters.AddWithValue("@yid", youtubeId);
 
                 using var reader = await cmd.ExecuteReaderAsync();
@@ -440,21 +451,26 @@ namespace Autonomuse.Services.Orchestration
                         Title = reader.GetString(2),
                         Extension = reader.GetString(3),
                         AlternativeTitle = reader.IsDBNull(4) ? null : reader.GetString(4),
-                        Source = reader.GetString(5),
-                        YoutubeID = reader.IsDBNull(6) ? null : reader.GetString(6),
-                        FilePath = reader.GetString(7),
-                        Artist = reader.IsDBNull(8) ? null : reader.GetString(8),
-                        Album = reader.IsDBNull(9) ? null : reader.GetString(9),
-                        Genre = reader.IsDBNull(10) ? null : reader.GetString(10),
-                        Duration = reader.IsDBNull(11) ? null : reader.GetDouble(11),
-                        Bitrate = reader.IsDBNull(12) ? null : reader.GetInt32(12),
-                        SampleRate = reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                        Channels = reader.IsDBNull(14) ? null : reader.GetInt32(14),
-                        Year = reader.IsDBNull(15) ? null : reader.GetInt32(15),
-                        FileSize = reader.IsDBNull(16) ? null : reader.GetInt64(16),
-                        CoverArtPath = reader.IsDBNull(17) ? null : reader.GetString(17),
-                        CreatedAt = reader.GetDateTime(18),
-                        UpdatedAt = reader.GetDateTime(19)
+                        AlternativeArtist = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        IsOriginalNonEnglish = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                        Source = reader.GetString(7),
+                        YoutubeID = reader.IsDBNull(8) ? null : reader.GetString(8),
+                        FilePath = reader.GetString(9),
+                        Artist = reader.IsDBNull(10) ? null : reader.GetString(10),
+                        Album = reader.IsDBNull(11) ? null : reader.GetString(11),
+                        Genre = reader.IsDBNull(12) ? null : reader.GetString(12),
+                        Duration = reader.IsDBNull(13) ? null : reader.GetDouble(13),
+                        Bitrate = reader.IsDBNull(14) ? null : reader.GetInt32(14),
+                        SampleRate = reader.IsDBNull(15) ? null : reader.GetInt32(15),
+                        Channels = reader.IsDBNull(16) ? null : reader.GetInt32(16),
+                        Year = reader.IsDBNull(17) ? null : reader.GetInt32(17),
+                        FileSize = reader.IsDBNull(18) ? null : reader.GetInt64(18),
+                        CoverArtPath = reader.IsDBNull(19) ? null : reader.GetString(19),
+                        Fingerprint = reader.IsDBNull(20) ? null : reader.GetString(20),
+                        CreatedAt = reader.GetDateTime(21),
+                        UpdatedAt = reader.GetDateTime(22),
+                         EnrichmentStatus = reader.GetInt32(23),
+                         FailedEnrich = reader.GetInt32(24)
                     };
                 }
             }
@@ -498,15 +514,18 @@ namespace Autonomuse.Services.Orchestration
                 var command = connection.CreateCommand();
                 command.CommandText = @"
                     UPDATE Audio SET 
-                        [Title] = @title, [AlternativeTitle] = @altTitle, [Artist] = @artist, 
+                        [Title] = @title, [AlternativeTitle] = @altTitle, [AlternativeArtist] = @altArtist, [IsOriginalNonEnglish] = @isNonEnglish, [Artist] = @artist, 
                         [Album] = @album, [Genre] = @genre, [Year] = @year, 
                         [CoverArtPath] = @coverArt, [Fingerprint] = @fingerprint, [UpdatedAt] = @updatedAt,
-                        [EnrichmentStatus] = @enrichStatus
+                        [EnrichmentStatus] = @enrichStatus,
+                        [FailedEnrich] = @failedEnrich
                     WHERE [GUID] = @guid;
                 ";
 
                 command.Parameters.AddWithValue("@title", record.Title);
                 command.Parameters.AddWithValue("@altTitle", (object?)record.AlternativeTitle ?? DBNull.Value);
+                command.Parameters.AddWithValue("@altArtist", (object?)record.AlternativeArtist ?? DBNull.Value);
+                command.Parameters.AddWithValue("@isNonEnglish", record.IsOriginalNonEnglish);
                 command.Parameters.AddWithValue("@artist", (object?)record.Artist ?? DBNull.Value);
                 command.Parameters.AddWithValue("@album", (object?)record.Album ?? DBNull.Value);
                 command.Parameters.AddWithValue("@genre", (object?)record.Genre ?? DBNull.Value);
@@ -515,6 +534,7 @@ namespace Autonomuse.Services.Orchestration
                 command.Parameters.AddWithValue("@fingerprint", (object?)record.Fingerprint ?? DBNull.Value);
                 command.Parameters.AddWithValue("@updatedAt", DateTime.UtcNow);
                 command.Parameters.AddWithValue("@enrichStatus", record.EnrichmentStatus);
+                command.Parameters.AddWithValue("@failedEnrich", record.FailedEnrich);
                 command.Parameters.AddWithValue("@guid", record.GUID);
 
                 await command.ExecuteNonQueryAsync();
@@ -701,10 +721,10 @@ namespace Autonomuse.Services.Orchestration
                 await connection.OpenAsync();
                 var cmd = connection.CreateCommand();
                 cmd.CommandText = @"
-                    SELECT a.[GUID], a.[FileName], a.[Title], a.[Extension], a.[AlternativeTitle], a.[Source], a.[YoutubeID],
+                    SELECT a.[GUID], a.[FileName], a.[Title], a.[Extension], a.[AlternativeTitle], a.[AlternativeArtist], a.[IsOriginalNonEnglish], a.[Source], a.[YoutubeID],
                            a.[FilePath], a.[Artist], a.[Album], a.[Genre], a.[Duration], a.[Bitrate], 
                            a.[SampleRate], a.[Channels], a.[Year], a.[FileSize], a.[CoverArtPath], a.[Fingerprint], a.[CreatedAt], a.[UpdatedAt],
-                           a.[EnrichmentStatus]
+                           a.[EnrichmentStatus], a.[FailedEnrich]
                     FROM Audio a
                     JOIN AudioPlaylistItems api ON a.[GUID] = api.[AudioGUID]
                     WHERE api.[PlaylistGUID] = @pg
@@ -720,23 +740,26 @@ namespace Autonomuse.Services.Orchestration
                         Title = reader.GetString(2),
                         Extension = reader.GetString(3),
                         AlternativeTitle = reader.IsDBNull(4) ? null : reader.GetString(4),
-                        Source = reader.GetString(5),
-                        YoutubeID = reader.IsDBNull(6) ? null : reader.GetString(6),
-                        FilePath = reader.GetString(7),
-                        Artist = reader.IsDBNull(8) ? null : reader.GetString(8),
-                        Album = reader.IsDBNull(9) ? null : reader.GetString(9),
-                        Genre = reader.IsDBNull(10) ? null : reader.GetString(10),
-                        Duration = reader.IsDBNull(11) ? null : reader.GetDouble(11),
-                        Bitrate = reader.IsDBNull(12) ? null : reader.GetInt32(12),
-                        SampleRate = reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                        Channels = reader.IsDBNull(14) ? null : reader.GetInt32(14),
-                        Year = reader.IsDBNull(15) ? null : reader.GetInt32(15),
-                        FileSize = reader.IsDBNull(16) ? null : reader.GetInt64(16),
-                        CoverArtPath = reader.IsDBNull(17) ? null : reader.GetString(17),
-                        Fingerprint = reader.IsDBNull(18) ? null : reader.GetString(18),
-                        CreatedAt = reader.GetDateTime(19),
-                        UpdatedAt = reader.GetDateTime(20),
-                        EnrichmentStatus = reader.GetInt32(21)
+                        AlternativeArtist = reader.IsDBNull(5) ? null : reader.GetString(5),
+                        IsOriginalNonEnglish = reader.IsDBNull(6) ? 0 : reader.GetInt32(6),
+                        Source = reader.GetString(7),
+                        YoutubeID = reader.IsDBNull(8) ? null : reader.GetString(8),
+                        FilePath = reader.GetString(9),
+                        Artist = reader.IsDBNull(10) ? null : reader.GetString(10),
+                        Album = reader.IsDBNull(11) ? null : reader.GetString(11),
+                        Genre = reader.IsDBNull(12) ? null : reader.GetString(12),
+                        Duration = reader.IsDBNull(13) ? null : reader.GetDouble(13),
+                        Bitrate = reader.IsDBNull(14) ? null : reader.GetInt32(14),
+                        SampleRate = reader.IsDBNull(15) ? null : reader.GetInt32(15),
+                        Channels = reader.IsDBNull(16) ? null : reader.GetInt32(16),
+                        Year = reader.IsDBNull(17) ? null : reader.GetInt32(17),
+                        FileSize = reader.IsDBNull(18) ? null : reader.GetInt64(18),
+                        CoverArtPath = reader.IsDBNull(19) ? null : reader.GetString(19),
+                        Fingerprint = reader.IsDBNull(20) ? null : reader.GetString(20),
+                        CreatedAt = reader.GetDateTime(21),
+                        UpdatedAt = reader.GetDateTime(22),
+                        EnrichmentStatus = reader.GetInt32(23),
+                        FailedEnrich = reader.GetInt32(24)
                     });
                 }
             }
@@ -951,6 +974,64 @@ namespace Autonomuse.Services.Orchestration
 
             _logger.LogInformation("Saved cover art to: {Path}", artPath);
             return artPath;
+        }
+
+        public async Task DeletePlaylistAsync(string playlistGuid)
+        {
+            using var connection = new SqliteConnection(_mediaDb.GetConnectionString());
+            await connection.OpenAsync();
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                // Get URL from description
+                string? url = null;
+                using (var getCmd = connection.CreateCommand())
+                {
+                    getCmd.Transaction = transaction;
+                    getCmd.CommandText = "SELECT Description FROM AudioPlaylist WHERE GUID = @g";
+                    getCmd.Parameters.AddWithValue("@g", playlistGuid);
+                    url = await getCmd.ExecuteScalarAsync() as string;
+                }
+
+                // Delete playlist items
+                using (var itemCmd = connection.CreateCommand())
+                {
+                    itemCmd.Transaction = transaction;
+                    itemCmd.CommandText = "DELETE FROM AudioPlaylistItems WHERE PlaylistGUID = @g";
+                    itemCmd.Parameters.AddWithValue("@g", playlistGuid);
+                    await itemCmd.ExecuteNonQueryAsync();
+                }
+
+                // Delete playlist
+                using (var playlistCmd = connection.CreateCommand())
+                {
+                    playlistCmd.Transaction = transaction;
+                    playlistCmd.CommandText = "DELETE FROM AudioPlaylist WHERE GUID = @g";
+                    playlistCmd.Parameters.AddWithValue("@g", playlistGuid);
+                    await playlistCmd.ExecuteNonQueryAsync();
+                }
+
+                // Delete watcher
+                if (!string.IsNullOrEmpty(url))
+                {
+                    using (var watchCmd = connection.CreateCommand())
+                    {
+                        watchCmd.Transaction = transaction;
+                        watchCmd.CommandText = "DELETE FROM AudioWatchPlaylist WHERE Url = @u";
+                        watchCmd.Parameters.AddWithValue("@u", url);
+                        await watchCmd.ExecuteNonQueryAsync();
+                    }
+                }
+
+                await transaction.CommitAsync();
+                _logger.LogInformation("Deleted audio playlist: {GUID}", playlistGuid);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to delete audio playlist {GUID}", playlistGuid);
+                throw;
+            }
         }
     }
 }

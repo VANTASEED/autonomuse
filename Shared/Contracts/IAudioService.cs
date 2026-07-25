@@ -26,5 +26,6 @@ namespace Autonomuse.Shared.Contracts
         Task<HashSet<string>> GetAudioGuidsInAnyPlaylistAsync();
         Task DeleteAudioAsync(string guid);
         Task<string> SaveCoverArtAsync(string guid, System.IO.Stream imageStream);
+        Task DeletePlaylistAsync(string playlistGuid);
     }
 }

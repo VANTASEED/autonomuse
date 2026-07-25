@@ -7,6 +7,8 @@ namespace Autonomuse.Domain.Entities
         public string Title { get; set; } = string.Empty;
         public string Extension { get; set; } = string.Empty;
         public string? AlternativeTitle { get; set; }
+        public string? AlternativeArtist { get; set; }
+        public int IsOriginalNonEnglish { get; set; } = 0;
         public string Source { get; set; } = string.Empty;
         public string? YoutubeID { get; set; }
         public string FilePath { get; set; } = string.Empty;
