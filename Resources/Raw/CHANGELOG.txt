@@ -1,3 +1,12 @@
+v1.1.3 - improvement updates
+---
+A more convenient download workflow, with clearer completion feedback and faster access to your library.
+
+- Added Windows notifications when audio and video downloads finish, so you can keep working while Autonomuse downloads in the background.
+- Click a completion notification to bring Autonomuse forward, including restoring a minimized window.
+- Completion summaries show how many files were added to your library and flag any failed downloads in the batch.
+- Notifications cover both manual downloads and watched playlist downloads, and skip items already in your library.
+
 v1.1.0
 ---
 - Added quality selector for video and audio downloads

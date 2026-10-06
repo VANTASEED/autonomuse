@@ -4,15 +4,20 @@ namespace Autonomuse
 {
     public partial class App : Application
     {
-        public App()
+        private readonly Shared.Contracts.IDownloadNotificationService _notifications;
+
+        public App(Shared.Contracts.IDownloadNotificationService notifications)
         {
+            _notifications = notifications;
             InitializeComponent();
         }
 
         protected override Window CreateWindow(IActivationState? activationState)
         {
             _ = UpdateService.CheckForUpdateAsync();
-            return new Window(new MainPage()) { Title = "Autonomuse" };
+            var window = new Window(new MainPage()) { Title = "Autonomuse" };
+            window.Destroying += (_, _) => (_notifications as IDisposable)?.Dispose();
+            return window;
         }
     }
 }

@@ -16,6 +16,7 @@ namespace Autonomuse.Services.Orchestration
         private readonly IVideoService _videoService;
         private readonly ISettingsService _settingsService;
         private readonly ILogger<YoutubeService> _logger;
+        private readonly IDownloadNotificationService _notifications;
         private readonly HttpClient _httpClient = new();
 
         public YoutubeService(
@@ -23,13 +24,15 @@ namespace Autonomuse.Services.Orchestration
             IAudioService audioService,
             IVideoService videoService,
             ISettingsService settingsService,
-            ILogger<YoutubeService> logger)
+            ILogger<YoutubeService> logger,
+            IDownloadNotificationService notifications)
         {
             _toolService = toolService;
             _audioService = audioService;
             _videoService = videoService;
             _settingsService = settingsService;
             _logger = logger;
+            _notifications = notifications;
         }
 
         public async Task<YoutubeDownloadResult> DownloadAudioAsync(string url, Action<string>? onProgress = null, Func<Task>? onPlaylistCreated = null, string? manualPlaylistGuid = null, CancellationToken ct = default)
@@ -428,6 +431,7 @@ namespace Autonomuse.Services.Orchestration
             }
 
             onProgress?.Invoke($"Successfully downloaded {current} item(s) from YouTube.");
+            _notifications.ShowCompleted(isAudio, successCount, errorCount);
             return new YoutubeDownloadResult
             {
                 Success = successCount,

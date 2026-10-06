@@ -63,6 +63,7 @@ namespace Autonomuse
             builder.Services.AddSingleton<Autonomuse.Shared.Contracts.IHomeUIService, Autonomuse.Services.Orchestration.HomeUIService>();
 
             // Platform-specific services
+            builder.Services.AddSingleton<Autonomuse.Shared.Contracts.IDownloadNotificationService, Autonomuse.Platforms.Windows.DownloadNotificationService>();
             builder.Services.AddTransient<Autonomuse.Shared.Contracts.IFolderPicker, Autonomuse.Platforms.Windows.FolderPickerImplementation>();
             builder.Services.AddSingleton<Autonomuse.Shared.Contracts.IExternalToolService, Autonomuse.Services.Orchestration.ExternalToolService>();
 
@@ -71,6 +72,10 @@ namespace Autonomuse
             builder.Services.AddScoped<Autonomuse.ViewModels.SettingViewModel>();
             builder.Services.AddScoped<Autonomuse.ViewModels.DashboardViewModel>();
             builder.Services.AddBlazorWebViewDeveloperTools();
+
+#if DEBUG
+            builder.Logging.AddDebug();
+#endif
 
             return builder.Build();
         }
