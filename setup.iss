@@ -1,7 +1,7 @@
 [Setup]
 AppName=Autonomuse
 AppVerName=Autonomuse
-AppVersion=1.1.3-Improvement_Updates
+AppVersion=1.1.4-Auto-updates-updates
 AppPublisher=VantaSeed
 AppId={{B0F1A2E3-4D5C-6B7A-8F9E-0D1C2B3A4F5E}
 ArchitecturesAllowed=x64compatible

@@ -158,6 +158,18 @@ namespace Autonomuse.Infrastructure.Data
                     await insertCmd.ExecuteNonQueryAsync();
                 }
 
+                // 6. Initialize AutoUpdateTools
+                var autoUpdateCmd = connection.CreateCommand();
+                autoUpdateCmd.CommandText = "SELECT COUNT(*) FROM Settings WHERE [Parameter] = 'AutoUpdateTools'";
+                var autoUpdateExists = Convert.ToInt32(await autoUpdateCmd.ExecuteScalarAsync()) > 0;
+
+                if (!autoUpdateExists)
+                {
+                    var insertCmd = connection.CreateCommand();
+                    insertCmd.CommandText = "INSERT INTO Settings ([Parameter], [Values]) VALUES ('AutoUpdateTools', 'true')";
+                    await insertCmd.ExecuteNonQueryAsync();
+                }
+
                 _logger.LogInformation("Core settings initialized (DebugMode: {Status})", _isDebugMode);
             }
             catch (Exception ex)

@@ -239,6 +239,59 @@ namespace Autonomuse.Services.Orchestration
             }
         }
 
+        // winget package IDs per tool (as listed in the Id column of `winget upgrade`)
+        private static readonly Dictionary<string, string[]> WingetIds = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["yt-dlp"] = new[] { "yt-dlp.yt-dlp" },
+            ["fpcalc"] = new[] { "AcoustID.Chromaprint" },
+            ["ffmpeg"] = new[] { "Gyan.FFmpeg", "yt-dlp.FFmpeg" }
+        };
+
+        // winget exit codes that mean "nothing to do" for an upgrade
+        private const int WingetNoApplicableUpgrade = -1978335189; // 0x8A15002B
+        private const int WingetNoInstalledPackage = -1978335212;  // 0x8A150014
+
+        public async Task<bool> UpgradeToolAsync(string toolName)
+        {
+            if (!WingetIds.TryGetValue(toolName, out var ids)) return false;
+
+            bool allSucceeded = true;
+            foreach (var id in ids)
+            {
+                bool succeeded = false;
+                for (int attempt = 1; attempt <= 2 && !succeeded; attempt++)
+                {
+                    try
+                    {
+                        var startInfo = new ProcessStartInfo
+                        {
+                            FileName = "cmd.exe",
+                            Arguments = $"/c winget upgrade --id {id} --exact --silent --accept-source-agreements --accept-package-agreements",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        };
+
+                        using var process = Process.Start(startInfo);
+                        if (process == null) throw new InvalidOperationException("Failed to start winget process.");
+
+                        await process.WaitForExitAsync();
+
+                        succeeded = process.ExitCode is 0 or WingetNoApplicableUpgrade or WingetNoInstalledPackage;
+                    }
+                    catch
+                    {
+                        succeeded = false;
+                    }
+
+                    if (!succeeded && attempt < 2) await Task.Delay(2000);
+                }
+
+                if (!succeeded) allSucceeded = false;
+            }
+
+            return allSucceeded;
+        }
+
         public bool HasInternetConnection()
         {
             return Connectivity.Current.NetworkAccess == NetworkAccess.Internet;
@@ -288,7 +341,7 @@ namespace Autonomuse.Services.Orchestration
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = "/c winget upgrade",
+                    Arguments = "/c winget upgrade --accept-source-agreements",
                     RedirectStandardOutput = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
@@ -307,18 +360,12 @@ namespace Autonomuse.Services.Orchestration
                     var parts = System.Text.RegularExpressions.Regex.Split(line, @"\s{2,}");
                     if (parts.Length >= 4)
                     {
-                        var id = parts[1].Trim();
-                        if (id.Equals("yt-dlp", StringComparison.OrdinalIgnoreCase))
+                        foreach (var (tool, ids) in WingetIds)
                         {
-                            outdated.Add("yt-dlp");
-                        }
-                        else if (id.Equals("chromaprint", StringComparison.OrdinalIgnoreCase) || id.Contains("chromaprint.chromaprint", StringComparison.OrdinalIgnoreCase))
-                        {
-                            outdated.Add("fpcalc");
-                        }
-                        else if (id.Equals("ffmpeg", StringComparison.OrdinalIgnoreCase) || id.Equals("yt-dlp.FFmpeg", StringComparison.OrdinalIgnoreCase))
-                        {
-                            outdated.Add("ffmpeg");
+                            if (parts.Any(p => ids.Contains(p.Trim(), StringComparer.OrdinalIgnoreCase)))
+                            {
+                                outdated.Add(tool);
+                            }
                         }
                     }
                 }

@@ -208,6 +208,18 @@
             <div class="setting-item">
                 <p class="setting-desc">Keep Autono<span class="blue-mu">μ'</span>se and its background utility tools up to date. Background tools are updated via winget, while application updates are fetched directly from GitHub.</p>
 
+                <label class="setting-sub-label">Automatically update background tools on launch (at most once every 24 hours)</label>
+                <div class="toggle-group mt-1">
+                    <button class="toggle-btn @(ViewModel.AutoUpdateTools ? "active" : "")"
+                            @onclick='() => { ViewModel.AutoUpdateTools = true; }'>
+                        On
+                    </button>
+                    <button class="toggle-btn @(!ViewModel.AutoUpdateTools ? "active" : "")"
+                            @onclick='() => { ViewModel.AutoUpdateTools = false; }'>
+                        Off
+                    </button>
+                </div>
+
                 @if (!string.IsNullOrEmpty(ViewModel.ToolStatusMessage))
                 {
                     <div class="tool-update-status @(ViewModel.ToolStatusMessage.StartsWith("SUCCESS:") ? "success" : ViewModel.ToolStatusMessage.StartsWith("ERROR:") ? "error" : "info")">

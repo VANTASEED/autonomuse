@@ -53,7 +53,7 @@ Download the latest installer (`Autonomuse_Setup.exe`) directly from the [Releas
 ### Prerequisites
 - **OS:** Windows 10 (Version 1809 / Build 17763 or higher) or Windows 11
 - **Framework:** .NET 10.0 SDK
-- **Dependencies:** `yt-dlp`, `fpcalc`, and `ffmpeg` (can be auto-installed and updated via `winget` within Settings)
+- **Dependencies:** `yt-dlp`, `fpcalc`, and `ffmpeg` (can be auto-installed and updated via `winget` within Settings; updates also run automatically on launch, at most once every 24 hours, and can be turned off)
 
 ### Option 2: Build from Source
 

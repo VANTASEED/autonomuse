@@ -33,6 +33,7 @@ namespace Autonomuse.ViewModels
         private string _acoustIdApiKey = string.Empty;
         private string _preferredVideoQuality = "1080";
         private string _preferredAudioQuality = "320";
+        private bool _autoUpdateTools = true;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -162,6 +163,20 @@ namespace Autonomuse.ViewModels
             }
         }
 
+        public bool AutoUpdateTools
+        {
+            get => _autoUpdateTools;
+            set
+            {
+                if (_autoUpdateTools != value)
+                {
+                    _autoUpdateTools = value;
+                    OnPropertyChanged();
+                    _ = _settingsService.SaveSettingAsync("AutoUpdateTools", value ? "true" : "false");
+                }
+            }
+        }
+
         public string CurrentPath
         {
             get => _currentPath;
@@ -267,6 +282,10 @@ namespace Autonomuse.ViewModels
             _preferredAudioQuality = await _settingsService.GetSettingAsync("PreferredAudioQuality") ?? "320";
             OnPropertyChanged(nameof(PreferredAudioQuality));
 
+            var autoUpdate = await _settingsService.GetSettingAsync("AutoUpdateTools");
+            _autoUpdateTools = !string.Equals(autoUpdate, "false", StringComparison.OrdinalIgnoreCase);
+            OnPropertyChanged(nameof(AutoUpdateTools));
+
             await RefreshToolsInfoAsync();
             _ = Task.Run(CheckForUpdatesAsync);
         }
@@ -304,7 +323,23 @@ namespace Autonomuse.ViewModels
                     return;
                 }
 
-                await _toolService.InstallToolAsync(toolName);
+                bool alreadyInstalled = toolName.ToLowerInvariant() switch
+                {
+                    "yt-dlp" => IsYtDlpReady,
+                    "fpcalc" => IsFpCalcReady,
+                    "ffmpeg" => IsFfmpegReady,
+                    _ => false
+                };
+
+                if (alreadyInstalled)
+                {
+                    if (!await _toolService.UpgradeToolAsync(toolName))
+                        throw new Exception("winget could not upgrade the package. A running download may be locking it.");
+                }
+                else
+                {
+                    await _toolService.InstallToolAsync(toolName);
+                }
                 await Task.Delay(1000);
                 await RefreshToolsInfoAsync();
 

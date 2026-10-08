@@ -20,6 +20,11 @@ namespace Autonomuse.Shared.Contracts
         Task InstallToolAsync(string toolName);
 
         /// <summary>
+        /// Upgrades an already-installed tool to the latest winget version. Returns false if the upgrade failed.
+        /// </summary>
+        Task<bool> UpgradeToolAsync(string toolName);
+
+        /// <summary>
         /// Checks if the device has an active internet connection.
         /// </summary>
         bool HasInternetConnection();

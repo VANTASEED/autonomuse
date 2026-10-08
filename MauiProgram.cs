@@ -66,6 +66,7 @@ namespace Autonomuse
             builder.Services.AddSingleton<Autonomuse.Shared.Contracts.IDownloadNotificationService, Autonomuse.Platforms.Windows.DownloadNotificationService>();
             builder.Services.AddTransient<Autonomuse.Shared.Contracts.IFolderPicker, Autonomuse.Platforms.Windows.FolderPickerImplementation>();
             builder.Services.AddSingleton<Autonomuse.Shared.Contracts.IExternalToolService, Autonomuse.Services.Orchestration.ExternalToolService>();
+            builder.Services.AddSingleton<Autonomuse.Services.Orchestration.ToolAutoUpdateService>();
 
             // ViewModels
             builder.Services.AddScoped<Autonomuse.ViewModels.StartViewModel>();

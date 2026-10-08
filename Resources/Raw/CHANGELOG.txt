@@ -1,3 +1,8 @@
+v1.1.4 - Auto-updates-updates
+---
+- Added automatic updates for yt-dlp, Chromaprint and FFmpeg (checked on launch, at most once every 24 hours; can be turned off in Settings > Updates)
+- Fixed tool update detection, which never recognized outdated tools because it matched the wrong winget package IDs
+
 v1.1.3 - improvement updates
 ---
 A more convenient download workflow, with clearer completion feedback and faster access to your library.
